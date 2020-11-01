@@ -141,7 +141,7 @@
     <ResourceCompile Include="tetris.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="C:\Users\mymai\Pictures\bitmaps\test.bmp" />
+    <Image Include="resources\test.bmp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
