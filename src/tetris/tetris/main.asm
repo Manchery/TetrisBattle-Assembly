@@ -26,17 +26,38 @@ includelib	Gdi32.lib
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; Equ 等值定义
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-ICO_MAIN	equ		1000h
-ID_TIMER	equ		1
+ICO_MAIN				equ		1000h
+ID_TIMER				equ		1
+WINDOW_WIDTH			equ		1200
+WINDOW_HEIGHT			equ		960
+TIMER_MAIN_INTERVAL		equ		10;ms
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; TODO 如果添加了新资源标识符，请从resource.h将其*复制*到此处。
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 IDB_BITMAP_TEST         equ	    101
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 数据段
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 		.data?
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; 结构体定义(注意对齐，或总是使用DWORD)
+KeyState	struct	;KeyState可识别上下左右、空格、ESC、数字1~6
+	up		dword	0
+	down	dword	0
+	left	dword	0
+	right	dword	0
+	space	dword	0
+	escape	dword	0
+	n1		dword	0
+	n2		dword	0
+	n3		dword	0
+	n4		dword	0
+	n5		dword	0
+	n6		dword	0
+KeyState	ends
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+keys		KeyState	<>
 hInstance	dd		?
 hWinMain	dd		?
 dwCenterX	dd		?	;圆心X
@@ -201,12 +222,15 @@ _DrawCustomizedBackground	proc _hDC
 		;这会使得程序每次都重新将图片加载到内存。
 		;实际使用时请预读取资源。
 		;此处只是为了展示方便。
+		.if	keys.down == 0
+			ret
+		.endif
 		invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
 		mov		@hDcBack, eax
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_TEST; 加载图片到@hBmpBack
 		mov		@hBmpBack, eax
 		invoke	SelectObject, @hDcBack, @hBmpBack; 将图片绑定到DC，这样，图片才能被操作
-		invoke	BitBlt,_hDC,0,0,400,300,@hDcBack,0,0,SRCCOPY ; 通过DC读取图片，复制到hDC，从而完成显示
+		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @hDcBack,0,0,SRCCOPY ; 通过DC读取图片，复制到hDC，从而完成显示
 		invoke	DeleteDC, @hDcBack ;回收资源（DC）
 		; For your ref:我应该使用DeleteDC还是ReleaseDC?
 		; https://www.cnblogs.com/vranger/p/3564606.html
@@ -218,44 +242,110 @@ _DrawCustomizedBackground	endp
 
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_ShowTime	proc	_hWnd,_hDC
-		local	@stTime:SYSTEMTIME
+_UpdateKeyState	proc  _wParam, _keyDown
+		local @timenow
+		;判断按键状态
+		;如果是按下，将键盘设置为按下时的系统时间；松开则改为0
+		;GetTickCount精度只有10~16ms，不要使用它进行过高精度的计算。
+		;经测试，在Windows 10下，该函数的精度似乎为10ms.
+		.if _keyDown != 0 ;current key is down.
+			invoke	GetTickCount
+			mov		@timenow,	eax
+		.else
+			mov		@timenow,	0
+		.endif
+
+		;更新按键
+		.if	_wParam == VK_UP
+			mov		eax,	@timenow
+			mov		keys.up,	eax
+		.elseif	_wParam == VK_DOWN
+			mov		eax,	@timenow
+			mov		keys.down,	eax
+		.elseif _wParam == VK_LEFT
+			mov		eax,	@timenow
+			mov		keys.left,	eax
+		.elseif	_wParam	== VK_RIGHT
+			mov		eax,	@timenow
+			mov		keys.right, eax
+		.elseif	_wParam	== VK_SPACE
+			mov		eax,	@timenow
+			mov		keys.space, eax
+		.elseif	_wParam	== VK_ESCAPE
+			mov		eax,	@timenow
+			mov		keys.escape,eax
+		.elseif _wParam == 31h ;31h for number 1.
+			mov		eax,	@timenow
+			mov		keys.n1,	eax
+		.elseif _wParam == 32h
+			mov		eax,	@timenow
+			mov		keys.n2,	eax
+		.elseif _wParam == 33h
+			mov		eax,	@timenow
+			mov		keys.n3,	eax
+		.elseif _wParam == 34h
+			mov		eax,	@timenow
+			mov		keys.n4,	eax
+		.elseif _wParam == 35h
+			mov		eax,	@timenow
+			mov		keys.n5,	eax
+		.elseif _wParam == 36h
+			mov		eax,	@timenow
+			mov		keys.n6,	eax
+		.endif
+		ret
+_UpdateKeyState	endp
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_OnPaint	proc	_hWnd,_hDC
+		local	@stTime:SYSTEMTIME, @bufferDC; bufferDC is cache for pictures.
+		local	@bufferBmp
+
 
 		pushad
 		invoke	GetLocalTime,addr @stTime
 		invoke	_CalcClockParam
 ;********************************************************************
+; 启用双缓冲绘图方式，避免界面闪烁
+;********************************************************************
+		invoke	CreateCompatibleDC, _hDC
+		mov		@bufferDC,	eax
+		invoke	CreateCompatibleBitmap, _hDC, WINDOW_WIDTH, WINDOW_HEIGHT
+		mov		@bufferBmp,	eax
+		invoke	SelectObject, @bufferDC, @bufferBmp
+;********************************************************************
 ; Customized 画一个自定义背景
 ;********************************************************************
-		invoke _DrawCustomizedBackground, _hDC
+		invoke _DrawCustomizedBackground, @bufferDC
 ;********************************************************************
 ; 画时钟圆周上的点
 ;********************************************************************
-		invoke	GetStockObject,BLACK_BRUSH
-		invoke	SelectObject,_hDC,eax
-		invoke	_DrawDot,_hDC,360/12,3	;画12个大圆点
-		invoke	_DrawDot,_hDC,360/60,1	;画60个小圆点
+		invoke	GetStockObject,WHITE_BRUSH
+		invoke	SelectObject,@bufferDC,eax
+		invoke	_DrawDot,@bufferDC,360/12,3	;画12个大圆点
+		invoke	_DrawDot,@bufferDC,360/60,1	;画60个小圆点
 ;********************************************************************
 ; 画时钟指针
 ;********************************************************************
-		invoke	CreatePen,PS_SOLID,1,0
-		invoke	SelectObject,_hDC,eax
+		invoke	CreatePen,PS_SOLID,1,0FFFFFFh
+		invoke	SelectObject,@bufferDC,eax
 		invoke	DeleteObject,eax
 		movzx	eax,@stTime.wSecond
 		mov	ecx,360/60
 		mul	ecx			;秒针度数 = 秒 * 360/60
-		invoke	_DrawLine,_hDC,eax,15
+		invoke	_DrawLine,@bufferDC,eax,15
 ;********************************************************************
-		invoke	CreatePen,PS_SOLID,2,0
-		invoke	SelectObject,_hDC,eax
+		invoke	CreatePen,PS_SOLID,2,0FFFFFFh
+		invoke	SelectObject,@bufferDC,eax
 		invoke	DeleteObject,eax
 		movzx	eax,@stTime.wMinute
 		mov	ecx,360/60
 		mul	ecx			;分针度数 = 分 * 360/60
-		invoke	_DrawLine,_hDC,eax,20
+		invoke	_DrawLine,@bufferDC,eax,20
 ;********************************************************************
-		invoke	CreatePen,PS_SOLID,3,0
-		invoke	SelectObject,_hDC,eax
+		invoke	CreatePen,PS_SOLID,3,0FFFFFFh
+		invoke	SelectObject,@bufferDC,eax
 		invoke	DeleteObject,eax
 		movzx	eax,@stTime.wHour
 		.if	eax >=	12
@@ -266,34 +356,51 @@ _ShowTime	proc	_hWnd,_hDC
 		movzx	ecx,@stTime.wMinute
 		shr	ecx,1
 		add	eax,ecx
-		invoke	_DrawLine,_hDC,eax,30
+		invoke	_DrawLine,@bufferDC,eax,30
 ;********************************************************************
+;		把缓存绘制到hDC上
+;********************************************************************
+		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH, WINDOW_HEIGHT,@bufferDC,0,0,SRCCOPY
 		invoke	GetStockObject,NULL_PEN
-		invoke	SelectObject,_hDC,eax
+		invoke	SelectObject,@bufferDC,eax
 		invoke	DeleteObject,eax
+		invoke	DeleteObject,@bufferBmp
+		invoke	DeleteObject,@bufferDC
 		popad
 		ret
 
-_ShowTime	endp
+_OnPaint	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam
 		local	@stPS:PAINTSTRUCT
 
 		mov	eax,uMsg
 		.if	eax ==	WM_TIMER
-			invoke	InvalidateRect,hWnd,NULL,TRUE
+			;TODO 调用ProcessTimer，以判断具体的定时器类型并做出响应。
+			;如，当前的定时器可能是UpdateFrame计时器，
+			;此时我们就计算当前的状态，并修改对应的状态。
+			invoke	InvalidateRect,hWnd,NULL,FALSE
+		
+;********************************************************************
+		.elseif	eax ==	WM_KEYDOWN
+			invoke	_UpdateKeyState, wParam, 1
+		.elseif	eax ==	WM_KEYUP
+			invoke	_UpdateKeyState, wParam, 0
+;********************************************************************
 		.elseif	eax ==	WM_PAINT
 			invoke	BeginPaint,hWnd,addr @stPS
-			invoke	_ShowTime,hWnd,eax
+			invoke	_OnPaint,hWnd,eax 
 			invoke	EndPaint,hWnd,addr @stPS
-		.elseif	eax ==	WM_CREATE
-			invoke	SetTimer,hWnd,ID_TIMER,1000,NULL
 ;********************************************************************
+		.elseif	eax ==	WM_CREATE
+			invoke	SetTimer,hWnd,ID_TIMER,TIMER_MAIN_INTERVAL,NULL
 		.elseif	eax ==	WM_CLOSE
 			invoke	KillTimer,hWnd,ID_TIMER
 			invoke	DestroyWindow,hWinMain
 			invoke	PostQuitMessage,NULL
 ;********************************************************************
+		.elseif	eax ==	WM_ERASEBKGND
+			
 		.else
 			invoke	DefWindowProc,hWnd,uMsg,wParam,lParam
 			ret
@@ -330,10 +437,13 @@ _WinMain	proc
 ;********************************************************************
 ; 建立并显示窗口
 ;********************************************************************
+		;设置窗口大小固定
+		mov	eax, WS_OVERLAPPEDWINDOW
+		xor	eax, WS_THICKFRAME
 		invoke	CreateWindowEx,WS_EX_CLIENTEDGE,\
 			offset szClassName,offset szClassName,\
-			WS_OVERLAPPEDWINDOW,\
-			100,100,250,270,\
+			eax,\
+			100,100,WINDOW_WIDTH,WINDOW_HEIGHT,\
 			NULL,NULL,hInstance,NULL
 		mov	hWinMain,eax
 		invoke	ShowWindow,hWinMain,SW_SHOWNORMAL
