@@ -64,8 +64,13 @@ dwCenterX	dd		?	;圆心X
 dwCenterY	dd		?	;圆心Y
 dwRadius	dd		?	;半径
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;	图片资源
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+bgTest		dword	0
+
 		.const
-szClassName	db	'Clock',0
+szClassName	db	'Tetris: the game',0
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 代码段
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -214,22 +219,15 @@ _DrawLine	proc	_hDC,_dwDegree,_dwRadiusAdjust
 		ret
 
 _DrawLine	endp
-
-
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _DrawCustomizedBackground	proc _hDC
 		local @hBmpBack, @hDcBack ; 'Back' for 'background'. 
-		;这会使得程序每次都重新将图片加载到内存。
-		;实际使用时请预读取资源。
-		;此处只是为了展示方便。
 		.if	keys.down == 0
 			ret
 		.endif
 		invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
 		mov		@hDcBack, eax
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_TEST; 加载图片到@hBmpBack
-		mov		@hBmpBack, eax
-		invoke	SelectObject, @hDcBack, @hBmpBack; 将图片绑定到DC，这样，图片才能被操作
+		invoke	SelectObject, @hDcBack, bgTest; 将图片绑定到DC，这样，图片才能被操作
 		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @hDcBack,0,0,SRCCOPY ; 通过DC读取图片，复制到hDC，从而完成显示
 		invoke	DeleteDC, @hDcBack ;回收资源（DC）
 		; For your ref:我应该使用DeleteDC还是ReleaseDC?
@@ -298,10 +296,23 @@ _UpdateKeyState	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_InitGame	proc  _hWnd
+
+		;设置定时器
+		invoke	SetTimer,_hWnd,ID_TIMER,TIMER_MAIN_INTERVAL,NULL
+		
+		;加载资源
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_TEST; 加载图片到bgTest
+		mov		bgTest, eax
+
+		ret
+_InitGame	endp
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _OnPaint	proc	_hWnd,_hDC
 		local	@stTime:SYSTEMTIME, @bufferDC; bufferDC is cache for pictures.
 		local	@bufferBmp
-
 
 		pushad
 		invoke	GetLocalTime,addr @stTime
@@ -360,7 +371,7 @@ _OnPaint	proc	_hWnd,_hDC
 ;********************************************************************
 ;		把缓存绘制到hDC上
 ;********************************************************************
-		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH, WINDOW_HEIGHT,@bufferDC,0,0,SRCCOPY
+		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH,WINDOW_HEIGHT,@bufferDC,0,0,SRCCOPY
 		invoke	GetStockObject,NULL_PEN
 		invoke	SelectObject,@bufferDC,eax
 		invoke	DeleteObject,eax
@@ -370,17 +381,29 @@ _OnPaint	proc	_hWnd,_hDC
 		ret
 
 _OnPaint	endp
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_ProcessTimer	proc  _hWnd, timerId
+		;TODO 调用ProcessTimer，以判断具体的定时器类型并做出响应。
+		;如，当前的定时器可能是UpdateFrame计时器，
+		;此时我们就计算当前的状态，并修改对应的状态。
+		.if timerId == ID_TIMER
+			invoke	InvalidateRect,_hWnd,NULL,FALSE
+		.else
+			ret
+		.endif
+		ret
+_ProcessTimer	endp
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam
 		local	@stPS:PAINTSTRUCT
 
 		mov	eax,uMsg
 		.if	eax ==	WM_TIMER
-			;TODO 调用ProcessTimer，以判断具体的定时器类型并做出响应。
-			;如，当前的定时器可能是UpdateFrame计时器，
-			;此时我们就计算当前的状态，并修改对应的状态。
-			invoke	InvalidateRect,hWnd,NULL,FALSE
-		
+			invoke	_ProcessTimer, hWnd, wParam
 ;********************************************************************
 		.elseif	eax ==	WM_KEYDOWN
 			invoke	_UpdateKeyState, wParam, 1
@@ -393,14 +416,14 @@ _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam
 			invoke	EndPaint,hWnd,addr @stPS
 ;********************************************************************
 		.elseif	eax ==	WM_CREATE
-			invoke	SetTimer,hWnd,ID_TIMER,TIMER_MAIN_INTERVAL,NULL
+			invoke	_InitGame, hWnd
 		.elseif	eax ==	WM_CLOSE
 			invoke	KillTimer,hWnd,ID_TIMER
 			invoke	DestroyWindow,hWinMain
 			invoke	PostQuitMessage,NULL
 ;********************************************************************
 		.elseif	eax ==	WM_ERASEBKGND
-			
+			ret
 		.else
 			invoke	DefWindowProc,hWnd,uMsg,wParam,lParam
 			ret
@@ -453,7 +476,7 @@ _WinMain	proc
 ;********************************************************************
 		.while	TRUE
 			invoke	GetMessage,addr @stMsg,NULL,0,0
-			.break	.if eax	== 0
+			.break	.if eax == 0
 			invoke	TranslateMessage,addr @stMsg
 			invoke	DispatchMessage,addr @stMsg
 		.endw
