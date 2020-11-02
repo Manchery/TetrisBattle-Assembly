@@ -383,13 +383,22 @@ _OnPaint	proc	_hWnd,_hDC
 _OnPaint	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_ComeputeGameLogic	proc  _hWnd
+		;TODO 在这里写游戏的逻辑
+		ret
+_ComeputeGameLogic	endp
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ProcessTimer	proc  _hWnd, timerId
 		;TODO 调用ProcessTimer，以判断具体的定时器类型并做出响应。
 		;如，当前的定时器可能是UpdateFrame计时器，
 		;此时我们就计算当前的状态，并修改对应的状态。
 		.if timerId == ID_TIMER
+			invoke	_ComeputeGameLogic, _hWnd
 			invoke	InvalidateRect,_hWnd,NULL,FALSE
 		.else
+			;TODO 在此处添加其它的计时器
 			ret
 		.endif
 		ret
