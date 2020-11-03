@@ -143,6 +143,9 @@
   <ItemGroup>
     <Image Include="resources\test.bmp" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="network.inc" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />

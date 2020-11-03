@@ -23,6 +23,9 @@ include		kernel32.inc
 includelib	kernel32.lib
 include		Gdi32.inc
 includelib	Gdi32.lib
+include		wsock32.inc
+includelib	wsock32.lib
+include		network.inc
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; Equ 等值定义
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -56,6 +59,7 @@ KeyState	struct	;KeyState可识别上下左右、空格、ESC、数字1~6
 	n5		dword	0
 	n6		dword	0
 KeyState	ends
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 keys		KeyState	<>
 hInstance	dd		?
@@ -225,6 +229,11 @@ _DrawCustomizedBackground	proc _hDC
 		.if	keys.down == 0
 			ret
 		.endif
+		;todo demo How to index an array.
+		;mov		eax,	1
+		;mov		ecx,	type NetworkMsg
+		;mul		ecx
+		;mov		inputQueue.msgs[eax].sender, 233
 		invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
 		mov		@hDcBack, eax
 		invoke	SelectObject, @hDcBack, bgTest; 将图片绑定到DC，这样，图片才能被操作
