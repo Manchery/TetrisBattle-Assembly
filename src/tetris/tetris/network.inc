@@ -4,12 +4,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Equ等值定义
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+TCP_PORT				equ		10086;Server will need to listen on 10086.
 NETWORK_BUFFER_LENGTH	equ		8192
 ;todo change 4 to 128. 4 is used for debugging.
-NETWORK_MSGBUF_LENGTH	equ		4;任意时刻，最多可有128条未读消息和未发消息。
+NETWORK_MSGBUF_LENGTH	equ		128;任意时刻，最多可有128条未读消息和未发消息。
 WM_SOCKET				equ		WM_USER + 100
-TCP_PORT				equ		10086;Server will need to listen on 10086.
-	.data?
+	.data
 NetworkMsg  struct;收发队列均用该结构体
 	inst	dword	0;指令的类型，从0~255.
 	sender	dword	0;发送指令的用户，0代表服务器，1~255代表客户端，此参数不总是起作用
@@ -23,7 +23,7 @@ NetworkMsg	ends
 ;  逻辑层不要操作这里的任何内容
 ;  总是调用提供的接口收、发数据
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-serverIpAddr	db		    '127.0.0.1', 16	dup(0)	;use localhost to test network
+serverIpAddr	db		    '127.0.0.1', 0	;use localhost to test network
 hSocket			dd			?
 readBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)
 writeBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)

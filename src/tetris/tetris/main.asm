@@ -96,8 +96,8 @@ _Disconnect	proc
 		mov inputQueue.len,		0
 		mov outputQueue.len,	0
 		;不必须，但我担心有的时候把它当字符串处理，所以还是调了下RtlZeroMemory
-		invoke RtlZeroMemory, readBuffer,  NETWORK_BUFFER_LENGTH
-		invoke RtlZeroMemory, writeBuffer, NETWORK_BUFFER_LENGTH
+		invoke RtlZeroMemory, offset readBuffer,  NETWORK_BUFFER_LENGTH
+		invoke RtlZeroMemory, offset writeBuffer, NETWORK_BUFFER_LENGTH
 
 		;todo:
 		;用户在DisconnectScreen中按下空格回到主界面。i.e.
@@ -120,7 +120,7 @@ _Connect	proc
 ; 创建 socket
 ;********************************************************************
 		invoke	RtlZeroMemory,addr @stSin,sizeof @stSin
-		invoke	inet_addr,addr serverIpAddr
+		invoke	inet_addr,offset serverIpAddr
 		.if	eax ==	INADDR_NONE
 			invoke	MessageBox,hWinMain,addr szErrIP,NULL,MB_OK or MB_ICONSTOP
 			jmp	_Err
@@ -280,7 +280,8 @@ _RecvData	proc
 		;并接收消息
 		mov	eax, NETWORK_BUFFER_LENGTH
 		sub	eax, ecx
-		jmp _Recved;added for debug/test
+		;added for debug/test
+		;jmp _Recved;added for debug/test
 		.if	eax ;这个判断实际上是不必要的，
 				;因为一次读取+处理后总不可能剩余超过255B，
 				;而缓冲区有8192B.
@@ -522,6 +523,7 @@ _SendData	proc
 				sub @remainBfSize, eax
 				add writeBfCnt, eax
 				;拷贝前4个数值到writeBuffer中
+				dec	eax
 				mov [esi], al
 				mov	eax, @pendingMsg.inst
 				mov	[esi + 1], al
@@ -542,15 +544,15 @@ _SendData	proc
 				or	ebx,ebx
 				jz	_Ret
 				;The line below is necessary for program:
-				;invoke	send,hSocket,esi,ebx,0
+				invoke	send,hSocket,esi,ebx,0
 
 				;for debug/todo:
 				;模拟5个字节成功发送的事件
-				.if writeBfCnt > 5
-					mov eax, 5
-				.else
-					mov eax, writeBfCnt
-				.endif
+				;.if writeBfCnt > 5
+				;	mov eax, 5
+				;.else
+				;	mov eax, writeBfCnt
+				;.endif
 
 				;异常处理
 				.if	eax ==	SOCKET_ERROR
@@ -633,6 +635,9 @@ _UpdateKeyState	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _InitGame	proc  _hWnd
+		local	@stWsa:WSADATA
+		;初始化网络
+		invoke	WSAStartup, 101h, addr @stWsa
 
 		;设置定时器
 		invoke	SetTimer,_hWnd,ID_TIMER,TIMER_MAIN_INTERVAL,NULL
@@ -736,18 +741,24 @@ _ComeputeGameLogic	proc  _hWnd
 			add	readBfCnt, eax
 			invoke _CopyMemory, edi, offset testString, testStrlen
 			mov keys.right, 0
-		.elseif keys.left;按左，把inputBuffer解析到结构体中
+		.elseif FALSE;keys.left;按左，把inputBuffer解析到结构体中
 			invoke _RecvData;, offset readBuffer, readBfCnt
 			mov keys.left, 0
 			mov	eax, eax
 		.elseif keys.up;按上，模拟取走一条Input消息
-			invoke _QueuePop, offset inputQueue, addr @testNetworkMsg
-			mov	eax, eax
+		;按上建立连接
 			mov keys.up, 0
-		.elseif keys.space;按空格，生成两个Output消息
+			invoke _Connect
+			mov	eax, eax
+		.elseif keys.space;按空格，生成两个总长度为7的Output消息，并在网络上发送
 			invoke _QueuePop, offset inputQueue, addr @testNetworkMsg
+			mov	@testNetworkMsg.inst, 233
+			mov	@testNetworkMsg.sender, 15
+			mov	@testNetworkMsg.recver, 25
+			mov @testNetworkMsg.msglen, 3
 			invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
 			invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
+			invoke _SendData
 			mov	eax, eax
 			mov keys.space, 0
 		.elseif keys.return;按回车，模拟在网络上发送一次数据
@@ -781,7 +792,23 @@ _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam
 		local	@stPS:PAINTSTRUCT
 
 		mov	eax,uMsg
-		.if	eax ==	WM_TIMER
+		.if	eax ==	WM_SOCKET
+;********************************************************************
+; 处理 Socket 消息
+;********************************************************************
+			mov	eax,lParam
+			.if	ax ==	FD_READ
+				invoke	_RecvData
+			.elseif	ax ==	FD_WRITE
+				invoke	_SendData	;继续发送缓冲区数据
+			.elseif	ax ==	FD_CONNECT
+				;TODO 添加合适的通知
+				ret
+			.elseif	ax ==	FD_CLOSE
+				call	_Disconnect
+			.endif
+;********************************************************************
+		.elseif	eax ==	WM_TIMER
 			invoke	_ProcessTimer, hWnd, wParam
 ;********************************************************************
 		.elseif	eax ==	WM_KEYDOWN
@@ -797,6 +824,8 @@ _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam
 		.elseif	eax ==	WM_CREATE
 			invoke	_InitGame, hWnd
 		.elseif	eax ==	WM_CLOSE
+			invoke  _Disconnect
+			invoke	WSACleanup
 			invoke	KillTimer,hWnd,ID_TIMER
 			invoke	DestroyWindow,hWinMain
 			invoke	PostQuitMessage,NULL
