@@ -52,6 +52,7 @@ KeyState	struct	;KeyState可识别上下左右、空格、ESC、数字1~6
 	right	dword	0
 	space	dword	0
 	escape	dword	0
+	return	dword	0
 	n1		dword	0
 	n2		dword	0
 	n3		dword	0
@@ -79,6 +80,250 @@ szClassName	db	'Tetris: the game',0
 ; 代码段
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 		.code
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 断开连接
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_Disconnect	proc
+		.if	hSocket
+			invoke	closesocket,hSocket
+			xor	eax,eax
+			mov	hSocket,eax
+		.endif
+
+		;清空缓冲区
+		mov readBfCnt,			0
+		mov writeBfCnt,			0
+		mov inputQueue.len,		0
+		mov outputQueue.len,	0
+		;不必须，但我担心有的时候把它当字符串处理，所以还是调了下RtlZeroMemory
+		invoke RtlZeroMemory, readBuffer,  NETWORK_BUFFER_LENGTH
+		invoke RtlZeroMemory, writeBuffer, NETWORK_BUFFER_LENGTH
+
+		;todo:
+		;用户在DisconnectScreen中按下空格回到主界面。i.e.
+		;invoke _ShowDisconnectScreen
+		ret
+_Disconnect	endp
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 连接到服务器
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_Connect	proc
+		local	@stSin:sockaddr_in
+
+		pushad
+		xor	eax,eax
+		;Todo what's a dbStep?
+		;mov	dbStep,al
+		mov	readBfCnt,eax
+		mov	writeBfCnt,eax
+;********************************************************************
+; 创建 socket
+;********************************************************************
+		invoke	RtlZeroMemory,addr @stSin,sizeof @stSin
+		invoke	inet_addr,addr serverIpAddr
+		.if	eax ==	INADDR_NONE
+			invoke	MessageBox,hWinMain,addr szErrIP,NULL,MB_OK or MB_ICONSTOP
+			jmp	_Err
+		.endif
+		mov	@stSin.sin_addr,eax
+		mov	@stSin.sin_family,AF_INET
+		invoke	htons,TCP_PORT
+		mov	@stSin.sin_port,ax
+
+		invoke	socket,AF_INET,SOCK_STREAM,0
+		mov	hSocket,eax
+;********************************************************************
+; 将socket设置为非阻塞模式，连接到服务器
+;********************************************************************
+		invoke	WSAAsyncSelect,hSocket,hWinMain,WM_SOCKET,FD_CONNECT or FD_READ or FD_CLOSE or FD_WRITE
+		invoke	connect,hSocket,addr @stSin,sizeof @stSin
+		.if	eax ==	SOCKET_ERROR
+			invoke	WSAGetLastError
+			.if eax != WSAEWOULDBLOCK
+				invoke	MessageBox,hWinMain,addr szErrConnect,NULL,MB_OK or MB_ICONSTOP
+				jmp	_Err
+			.endif
+		.endif
+		ret
+_Err:
+		invoke	_Disconnect
+		ret
+_Connect	endp
+
+
+
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 将消息加入队列
+; 如果队列已满，则最早的一条消息将被覆盖
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_QueuePush	proc _queue, _msg
+	pushad
+	;获取队列的地址
+	mov esi, _queue
+	; esi points at queue len
+	add esi, type NetworkMsg * NETWORK_MSGBUF_LENGTH
+	mov edi, esi
+	; edi points at queue head
+	add edi, type dword
+	mov ebx, [esi]		;获取长度
+	mov eax, [edi]		;获取Head
+	add eax, ebx
+	.if eax >= NETWORK_MSGBUF_LENGTH
+		sub eax, NETWORK_MSGBUF_LENGTH
+	.endif
+	;插入点在eax，接下来将其转换为队列中的地址
+	mul typeNetworkMsg
+	add eax, _queue
+	;拷贝结构体
+	invoke _CopyMemory, eax, _msg, type NetworkMsg
+	;更新队列数据
+	.if dword ptr [esi] == NETWORK_MSGBUF_LENGTH
+		;队列已满，则队列头部后移，覆盖最早的消息
+		inc dword ptr [edi]
+		.if dword ptr [edi] >= NETWORK_MSGBUF_LENGTH
+			mov dword ptr [edi], 0
+		.endif
+	.else
+		inc dword ptr [esi]
+	.endif
+	popad
+	ret
+_QueuePush	endp
+
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 将消息弹出队列、并把弹出的消息返回到_msg所指向的位置（请留下充足的空间）
+;（函数将修改eax.）
+; 返回值: eax == 0 ,if it's already empty before pop
+;		 eax != 0 ,otherwise
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_QueuePop	proc _queue, _msg
+			local @isEmpty
+	pushad
+	;获取队列的地址
+	mov esi, _queue
+	; esi points at queue len
+	add esi, type NetworkMsg * NETWORK_MSGBUF_LENGTH
+	mov edi, esi
+	; edi points at queue head
+	add edi, type dword
+	mov ebx, [esi]		;获取长度
+	.if ebx == 0		;若长度为0，直接返回eax = 0
+		mov @isEmpty, 0
+		jmp _Ret
+	.endif
+	mov @isEmpty, 1
+	mov eax, [edi]		;获取Head
+	;弹出点在eax，接下来将其转换为队列中的地址
+	mul typeNetworkMsg
+	add eax, _queue
+	;拷贝结构体
+	invoke _CopyMemory, _msg, eax, type NetworkMsg
+	;更新队列数据
+	dec dword ptr [esi]
+	inc dword ptr [edi]
+	.if dword ptr [edi] >= NETWORK_MSGBUF_LENGTH
+		mov dword ptr [edi], 0	
+	.endif
+_Ret:
+	popad
+	mov eax, @isEmpty
+	ret
+_QueuePop	endp
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 处理缓冲区数据为消息结构体
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_ProcessMsg	proc _buffer, _len
+			local @parsedMsg:NetworkMsg
+		pushad
+
+		invoke  RtlZeroMemory, addr @parsedMsg, type NetworkMsg
+
+		mov		esi, _buffer
+		movzx	eax, byte ptr [esi + 0]
+		mov		@parsedMsg.inst,	eax
+		movzx	eax, byte ptr [esi + 1]
+		mov		@parsedMsg.sender,	eax
+		movzx	eax, byte ptr [esi + 2]
+		mov		@parsedMsg.recver,	eax
+
+		mov		eax,	_len
+		sub		eax,	3
+		mov		@parsedMsg.msglen,	eax
+		.if	eax
+			add esi, 3
+			invoke _CopyMemory, addr @parsedMsg.msg, esi, eax
+		.endif
+
+		;add @parsedMsg into inputQueue
+		invoke	_QueuePush, offset inputQueue, addr @parsedMsg
+		popad
+		ret
+_ProcessMsg	endp
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 接收数据包
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_RecvData	proc
+		local	@tmpBuffer[512]:byte, @msgLength
+
+		pushad
+		;将esi指向接收缓冲区中下一个可写的位置
+		;ecx是缓冲区中已有的数据长度。
+		mov	esi,offset readBuffer
+		mov	ecx,readBfCnt
+		add	esi,ecx
+;********************************************************************
+		;将eax指向剩余可用的全部缓冲区大小
+		;并接收消息
+		mov	eax, NETWORK_BUFFER_LENGTH
+		sub	eax, ecx
+		jmp _Recved;added for debug/test
+		.if	eax ;这个判断实际上是不必要的，
+				;因为一次读取+处理后总不可能剩余超过255B，
+				;而缓冲区有8192B.
+			invoke	recv,hSocket,esi,eax,NULL
+			.if	eax ==	SOCKET_ERROR
+				invoke	WSAGetLastError
+				.if	eax !=	WSAEWOULDBLOCK
+					invoke	_Disconnect
+				.endif
+				jmp	_Ret
+			.endif
+			add	readBfCnt,eax
+		.endif
+;********************************************************************
+; 如果整个数据包接收完毕，则进行处理
+;********************************************************************
+_Recved:
+		;while循环解决可能存在的粘包现象。
+		;将esi定位到buffer头部
+		mov	esi, offset readBuffer
+		.while readBfCnt > 0
+			movzx	eax, byte ptr[esi];获取下一条消息的长度
+			mov		@msgLength, eax
+			inc		eax;将readBuffer[0]计算在内
+			.break .if eax > readBfCnt;收到的信息不完整，返回，等待下次接收
+			sub		readBfCnt, eax;readBfCnt -= Current Msg Length
+			inc		esi
+			invoke	_ProcessMsg, esi, @msgLength; ProcessMsg将保存esi.
+			add		esi, @msgLength
+		.endw
+		
+		;如果还有剩余的字符串，就把它复制到buffer头部。
+		.if	readBfCnt > 0
+			invoke	_CopyMemory, addr @tmpBuffer, esi, readBfCnt
+			invoke  _CopyMemory, offset readBuffer, addr @tmpBuffer, readBfCnt
+		.endif
+;********************************************************************
+_Ret:
+		popad
+		ret
+
+_RecvData	endp
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 计算时钟的位置、大小等参数
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -248,6 +493,97 @@ _DrawCustomizedBackground	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 发送缓冲区中的数据，上次的数据有可能未发送完，故每次发送前，
+; 先将发送缓冲区合并
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_SendData	proc
+		local	@remainBfSize, @pendingMsg:NetworkMsg
+		pushad
+;********************************************************************
+; 检测发送队列中是否还有数据，如果有，
+; 就尝试将要发送的内容加到缓冲区的尾部
+;********************************************************************
+		.while TRUE
+			; 计算缓冲区余下部分的长度
+			mov eax, NETWORK_BUFFER_LENGTH
+			sub eax, writeBfCnt
+			mov @remainBfSize, eax
+			;从队列中循环抽取结构体
+			;直到队空或者缓冲区满
+			.while outputQueue.len != 0
+				invoke _QueuePop, offset outputQueue, addr @pendingMsg
+				mov eax, @pendingMsg.msglen
+				add	eax, 4
+				.break .if eax > @remainBfSize ;缓冲区满
+				mov esi, offset writeBuffer
+				add esi, writeBfCnt
+				sub @remainBfSize, eax
+				add writeBfCnt, eax
+				;拷贝前4个数值到writeBuffer中
+				mov [esi], al
+				mov	eax, @pendingMsg.inst
+				mov	[esi + 1], al
+				mov	eax, @pendingMsg.sender
+				mov	[esi + 2], al
+				mov	eax, @pendingMsg.recver
+				mov	[esi + 3], al
+				add esi, 4
+				;复制余下的消息体到writeBuffer中
+				.if @pendingMsg.msglen > 0
+					invoke _CopyMemory, esi, addr @pendingMsg.msg, @pendingMsg.msglen
+				.endif
+			.endw
+			.break .if writeBfCnt == 0;如果已没有需要发送的数据，退出循环
+			@@:
+				mov	esi,offset writeBuffer
+				mov	ebx,writeBfCnt
+				or	ebx,ebx
+				jz	_Ret
+				;The line below is necessary for program:
+				;invoke	send,hSocket,esi,ebx,0
+
+				;for debug/todo:
+				;模拟5个字节成功发送的事件
+				.if writeBfCnt > 5
+					mov eax, 5
+				.else
+					mov eax, writeBfCnt
+				.endif
+
+				;异常处理
+				.if	eax ==	SOCKET_ERROR
+					invoke	WSAGetLastError
+					.if	eax !=	WSAEWOULDBLOCK
+						;如果发送时遇到除了缓冲区满之外的错误
+						;直接断开连接
+						invoke	_Disconnect
+					.endif
+					jmp	_Ret
+				.endif
+				.if (eax == 0) || (eax > NETWORK_BUFFER_LENGTH)
+					;写0或负数字节
+					jmp	_Ret
+				.endif
+				sub	writeBfCnt,eax
+				mov	ecx,writeBfCnt
+				mov	edi,offset writeBuffer
+				lea	esi,[edi+eax]
+				.if	ecx && (edi != esi)
+					cld
+					rep	movsb
+					jmp	@B
+				.endif
+		.endw
+_Ret:
+		popad
+		ret
+
+_SendData	endp
+
+
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _UpdateKeyState	proc  _wParam, _keyDown
 		local @timenow
@@ -263,41 +599,32 @@ _UpdateKeyState	proc  _wParam, _keyDown
 		.endif
 
 		;更新按键
+		mov		eax,	@timenow
 		.if	_wParam == VK_UP
-			mov		eax,	@timenow
 			mov		keys.up,	eax
 		.elseif	_wParam == VK_DOWN
-			mov		eax,	@timenow
 			mov		keys.down,	eax
 		.elseif _wParam == VK_LEFT
-			mov		eax,	@timenow
 			mov		keys.left,	eax
 		.elseif	_wParam	== VK_RIGHT
-			mov		eax,	@timenow
 			mov		keys.right, eax
 		.elseif	_wParam	== VK_SPACE
-			mov		eax,	@timenow
 			mov		keys.space, eax
 		.elseif	_wParam	== VK_ESCAPE
-			mov		eax,	@timenow
 			mov		keys.escape,eax
+		.elseif	_wParam	== VK_RETURN
+			mov		keys.return,eax
 		.elseif _wParam == 31h ;31h for number 1.
-			mov		eax,	@timenow
 			mov		keys.n1,	eax
 		.elseif _wParam == 32h
-			mov		eax,	@timenow
 			mov		keys.n2,	eax
 		.elseif _wParam == 33h
-			mov		eax,	@timenow
 			mov		keys.n3,	eax
 		.elseif _wParam == 34h
-			mov		eax,	@timenow
 			mov		keys.n4,	eax
 		.elseif _wParam == 35h
-			mov		eax,	@timenow
 			mov		keys.n5,	eax
 		.elseif _wParam == 36h
-			mov		eax,	@timenow
 			mov		keys.n6,	eax
 		.endif
 		ret
@@ -312,7 +639,9 @@ _InitGame	proc  _hWnd
 		
 		;加载资源
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_TEST; 加载图片到bgTest
-		mov		bgTest, eax
+		mov		bgTest, eax		;以后，每当要使用资源，就调用bgTest
+		;TODO 如果你们愿意的话，可以考虑把所有背景相关的变量搞个结构体
+		;但其实意义不大，因为我的VS没有自动补全
 
 		ret
 _InitGame	endp
@@ -393,7 +722,39 @@ _OnPaint	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ComeputeGameLogic	proc  _hWnd
+		local @testNetworkMsg:NetworkMsg
 		;TODO 在这里写游戏的逻辑
+
+		;下面是(离线)测试网络相关API的函数
+		;一旦测试全部通过，这些代码就会被移除
+		;它们也可以用来测试按键的行为：
+		;当debug时，按键松开事件不能收到，因此需要手动重置按键状态
+		.if keys.right;按右，就接收3条Input消息到缓冲中
+			mov edi, offset readBuffer
+			add edi, readBfCnt
+			mov eax, testStrlen
+			add	readBfCnt, eax
+			invoke _CopyMemory, edi, offset testString, testStrlen
+			mov keys.right, 0
+		.elseif keys.left;按左，把inputBuffer解析到结构体中
+			invoke _RecvData;, offset readBuffer, readBfCnt
+			mov keys.left, 0
+			mov	eax, eax
+		.elseif keys.up;按上，模拟取走一条Input消息
+			invoke _QueuePop, offset inputQueue, addr @testNetworkMsg
+			mov	eax, eax
+			mov keys.up, 0
+		.elseif keys.space;按空格，生成两个Output消息
+			invoke _QueuePop, offset inputQueue, addr @testNetworkMsg
+			invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
+			invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
+			mov	eax, eax
+			mov keys.space, 0
+		.elseif keys.return;按回车，模拟在网络上发送一次数据
+			invoke _SendData
+			mov	eax, eax
+			mov keys.return, 0
+		.endif 
 		ret
 _ComeputeGameLogic	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
