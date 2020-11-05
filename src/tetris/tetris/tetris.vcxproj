@@ -143,9 +143,11 @@
   <ItemGroup>
     <Image Include="resources\bg1.bmp" />
     <Image Include="resources\bg2.bmp" />
+    <Image Include="resources\bg3.bmp" />
     <Image Include="resources\bg4.bmp" />
     <Image Include="resources\black.bmp" />
     <Image Include="resources\boom.bmp" />
+    <Image Include="resources\ip.bmp" />
     <Image Include="resources\skip.bmp" />
     <Image Include="resources\special.bmp" />
     <Image Include="resources\speed.bmp" />

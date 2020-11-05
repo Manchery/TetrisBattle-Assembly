@@ -40,6 +40,7 @@ TIMER_MAIN_INTERVAL		equ		10;ms
 IDB_BITMAP_TEST         equ	    101
 IDB_BITMAP_BG1			equ		104
 IDB_BITMAP_BG2          equ     105
+IDB_BITMAP_BG3          equ     123
 IDB_BITMAP_BG4          equ     106
 IDB_BITMAP_BLACK        equ     107
 IDB_BITMAP_BOOM         equ     108
@@ -47,6 +48,7 @@ IDB_BITMAP_SKIP         equ     109
 IDB_BITMAP_SPECIAL      equ     110
 IDB_BITMAP_SQUARE       equ     112
 IDB_BITMAP_SPEED        equ     113
+IDB_BITMAP_IP           equ     125
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 数据段
@@ -55,24 +57,32 @@ IDB_BITMAP_SPEED        equ     113
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; 结构体定义(注意对齐，或总是使用DWORD)
 KeyState	struct	;KeyState可识别上下左右、空格、ESC、数字1~6
-	up		dword	0
-	down	dword	0
-	left	dword	0
-	right	dword	0
-	space	dword	0
-	escape	dword	0
-	return	dword	0
-	n1		dword	0
-	n2		dword	0
-	n3		dword	0
-	n4		dword	0
-	n5		dword	0
-	n6		dword	0
+	up			dword	0
+	down		dword	0
+	left		dword	0
+	right		dword	0
+	space		dword	0
+	escape		dword	0
+	return		dword	0
+	n0			dword	0
+	n1			dword	0
+	n2			dword	0
+	n3			dword	0
+	n4			dword	0
+	n5			dword	0
+	n6			dword	0
+	n7			dword	0
+	n8			dword	0
+	n9			dword	0
+	back		dword	0
+	point		dword	0
 KeyState	ends
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 keys		KeyState	<>
 _status		dword	0
+_ipLen		dword	0
+_ipStr		BYTE	20  DUP(0)
 hInstance	dd		?
 hWinMain	dd		?
 dwCenterX	dd		?	;圆心X
@@ -85,6 +95,7 @@ dwRadius	dd		?	;半径
 bgTest		dword	0
 _bg1		dword	0
 _bg2		dword	0	
+_bg3		dword	0	
 _bg4		dword	0
 _black		dword	0
 _boom		dword	0
@@ -92,6 +103,8 @@ _skip		dword	0
 _special	dword	0		
 _square		dword	0
 _speed		dword	0
+_ip			dword	0
+
 
 		.const
 szClassName	db	'Tetris: the game',0
@@ -490,7 +503,7 @@ _DrawLine	proc	_hDC,_dwDegree,_dwRadiusAdjust
 _DrawLine	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _DrawCustomizedBackground	proc _hDC
-		local @hBmpBack, @hDcBack ; 'Back' for 'background'. 
+		local @dcBack, @hDcBack ; 'Back' for 'background'. 
 		;todo demo How to index an array.
 		;mov		eax,	1
 		;mov		ecx,	type NetworkMsg
@@ -501,14 +514,23 @@ _DrawCustomizedBackground	proc _hDC
 		.if	_status == 0
 			invoke	SelectObject, @hDcBack, _bg1; 将图片绑定到DC，这样，图片才能被操作
 		.elseif _status ==1
-			invoke	SelectObject, @hDcBack, bgTest; 将图片绑定到DC，这样，图片才能被操作
+			invoke	SelectObject, @hDcBack, _bg2
+		.elseif _status == 2
+			invoke	SelectObject, @hDcBack, _bg3
+			;invoke	CreateCompatibleDC,@hDcBack
+			;mov		@dcBack, eax
+			;invoke	SelectObject, @dcBack, _bg3
+			;invoke	BitBlt,@hDcBack,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @dcBack,0,0,SRCCOPY
+			invoke TextOutA, @hDcBack, 500, 380, addr _ipStr, _ipLen
+		.elseif _status == 3
+			invoke	SelectObject, @hDcBack, _bg4
 		.endif
 		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @hDcBack,0,0,SRCCOPY ; 通过DC读取图片，复制到hDC，从而完成显示
 
 		invoke	DeleteDC, @hDcBack ;回收资源（DC）
 		; For your ref:我应该使用DeleteDC还是ReleaseDC?
 		; https://www.cnblogs.com/vranger/p/3564606.html
-		invoke	DeleteObject, @hBmpBack
+		invoke	DeleteDC, @dcBack
 		; Todo: 没有自动补全怎么破...
 		ret
 _DrawCustomizedBackground	endp
@@ -637,7 +659,11 @@ _UpdateKeyState	proc  _wParam, _keyDown
 			mov		keys.escape,eax
 		.elseif	_wParam	== VK_RETURN
 			mov		keys.return,eax
-		.elseif _wParam == 31h ;31h for number 1.
+		.elseif	_wParam	== VK_BACK
+			mov		keys.back,	eax
+		.elseif _wParam == 30h ;30h for number 0.
+			mov		keys.n0,	eax
+		.elseif _wParam == 31h
 			mov		keys.n1,	eax
 		.elseif _wParam == 32h
 			mov		keys.n2,	eax
@@ -649,6 +675,14 @@ _UpdateKeyState	proc  _wParam, _keyDown
 			mov		keys.n5,	eax
 		.elseif _wParam == 36h
 			mov		keys.n6,	eax
+		.elseif _wParam == 37h
+			mov		keys.n7,	eax
+		.elseif _wParam == 38h
+			mov		keys.n8,	eax
+		.elseif _wParam == 39h
+			mov		keys.n9,	eax
+		.elseif _wParam == VK_OEM_PERIOD
+			mov		keys.point,	eax
 		.endif
 		ret
 _UpdateKeyState	endp
@@ -670,6 +704,8 @@ _InitGame	proc  _hWnd
 		mov		_bg1, eax		
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG2
 		mov		_bg2, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG3
+		mov		_bg3, eax		
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG4
 		mov		_bg4, eax		
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_BLACK
@@ -684,6 +720,8 @@ _InitGame	proc  _hWnd
 		mov		_square, eax		
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_SPEED
 		mov		_speed, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_IP
+		mov		_ip, eax		
 		;TODO 如果你们愿意的话，可以考虑把所有背景相关的变量搞个结构体
 		;但其实意义不大，因为我的VS没有自动补全
 
@@ -714,42 +752,42 @@ _OnPaint	proc	_hWnd,_hDC
 ;********************************************************************
 ; 画时钟圆周上的点
 ;********************************************************************
-		invoke	GetStockObject,WHITE_BRUSH
-		invoke	SelectObject,@bufferDC,eax
-		invoke	_DrawDot,@bufferDC,360/12,3	;画12个大圆点
-		invoke	_DrawDot,@bufferDC,360/60,1	;画60个小圆点
+		;invoke	GetStockObject,WHITE_BRUSH
+		;invoke	SelectObject,@bufferDC,eax
+		;invoke	_DrawDot,@bufferDC,360/12,3	;画12个大圆点
+		;invoke	_DrawDot,@bufferDC,360/60,1	;画60个小圆点
 ;********************************************************************
 ; 画时钟指针
 ;********************************************************************
-		invoke	CreatePen,PS_SOLID,1,0FFFFFFh
-		invoke	SelectObject,@bufferDC,eax
-		invoke	DeleteObject,eax
-		movzx	eax,@stTime.wSecond
-		mov	ecx,360/60
-		mul	ecx			;秒针度数 = 秒 * 360/60
-		invoke	_DrawLine,@bufferDC,eax,15
+		;invoke	CreatePen,PS_SOLID,1,0FFFFFFh
+		;invoke	SelectObject,@bufferDC,eax
+		;invoke	DeleteObject,eax
+		;movzx	eax,@stTime.wSecond
+		;mov	ecx,360/60
+		;mul	ecx			;秒针度数 = 秒 * 360/60
+		;invoke	_DrawLine,@bufferDC,eax,15
 ;********************************************************************
-		invoke	CreatePen,PS_SOLID,2,0FFFFFFh
-		invoke	SelectObject,@bufferDC,eax
-		invoke	DeleteObject,eax
-		movzx	eax,@stTime.wMinute
-		mov	ecx,360/60
-		mul	ecx			;分针度数 = 分 * 360/60
-		invoke	_DrawLine,@bufferDC,eax,20
+		;invoke	CreatePen,PS_SOLID,2,0FFFFFFh
+		;invoke	SelectObject,@bufferDC,eax
+		;invoke	DeleteObject,eax
+		;movzx	eax,@stTime.wMinute
+		;mov	ecx,360/60
+		;mul	ecx			;分针度数 = 分 * 360/60
+		;invoke	_DrawLine,@bufferDC,eax,20
 ;********************************************************************
-		invoke	CreatePen,PS_SOLID,3,0FFFFFFh
-		invoke	SelectObject,@bufferDC,eax
-		invoke	DeleteObject,eax
-		movzx	eax,@stTime.wHour
-		.if	eax >=	12
-			sub	eax,12
-		.endif
-		mov	ecx,360/12
-		mul	ecx
-		movzx	ecx,@stTime.wMinute
-		shr	ecx,1
-		add	eax,ecx
-		invoke	_DrawLine,@bufferDC,eax,30
+		;invoke	CreatePen,PS_SOLID,3,0FFFFFFh
+		;invoke	SelectObject,@bufferDC,eax
+		;invoke	DeleteObject,eax
+		;movzx	eax,@stTime.wHour
+		;.if	eax >=	12
+		;	sub	eax,12
+		;.endif
+		;mov	ecx,360/12
+		;mul	ecx
+		;movzx	ecx,@stTime.wMinute
+		;shr	ecx,1
+		;add	eax,ecx
+		;invoke	_DrawLine,@bufferDC,eax,30
 ;********************************************************************
 ;		把缓存绘制到hDC上
 ;********************************************************************
@@ -774,16 +812,22 @@ _ComeputeGameLogic	proc  _hWnd
 		;它们也可以用来测试按键的行为：
 		;当debug时，按键松开事件不能收到，因此需要手动重置按键状态
 		.if keys.right;按右，就接收3条Input消息到缓冲中
+			.if _status == 0
+				mov _status, 1
+			.endif
 			mov edi, offset readBuffer
 			add edi, readBfCnt
 			mov eax, testStrlen
 			add	readBfCnt, eax
 			invoke _CopyMemory, edi, offset testString, testStrlen
 			mov keys.right, 0
-		.elseif FALSE;keys.left;按左，把inputBuffer解析到结构体中
-			invoke _RecvData;, offset readBuffer, readBfCnt
-			mov keys.left, 0
-			mov	eax, eax
+		.elseif keys.left;keys.left;按左，把inputBuffer解析到结构体中
+			.if _status == 1
+				mov _status, 0
+			.endif
+			;invoke _RecvData;, offset readBuffer, readBfCnt
+			;mov keys.left, 0
+			;mov	eax, eax
 		.elseif keys.up;按上，模拟取走一条Input消息
 		;按上建立连接
 			mov keys.up, 0
@@ -801,9 +845,122 @@ _ComeputeGameLogic	proc  _hWnd
 			mov	eax, eax
 			mov keys.space, 0
 		.elseif keys.return;按回车，模拟在网络上发送一次数据
+			.if _status == 0
+				mov _status, 3
+			.elseif _status == 1
+				mov _status, 2
+			.elseif _status == 2
+				mov _status, 3
+			.endif
 			invoke _SendData
 			mov	eax, eax
 			mov keys.return, 0
+		.elseif keys.back
+			.if _status == 2
+				.if _ipLen > 0
+					dec eax
+				.endif
+			.endif
+			mov keys.back, 0
+		.elseif keys.n0
+			.if _status == 2
+				.if _ipLen < 15
+					mov eax, _ipLen
+					mov _ipStr[eax], '0'
+					inc _ipLen
+				.endif
+			.endif
+			mov keys.n0, 0
+		.elseif keys.n1
+			.if _status == 2
+				.if _ipLen < 15
+					mov eax, _ipLen
+					mov _ipStr[eax], '1'
+					inc _ipLen
+				.endif
+			.endif
+			mov keys.n1, 0
+		.elseif keys.n2
+			.if _status == 2
+				.if _ipLen < 15
+					mov eax, _ipLen
+					mov _ipStr[eax], '2'
+					inc _ipLen
+				.endif
+			.endif
+			mov keys.n2, 0
+		.elseif keys.n3
+			.if _status == 2
+				.if _ipLen < 15
+					mov eax, _ipLen
+					mov _ipStr[eax], '3'
+					inc _ipLen
+				.endif
+			.endif
+			mov keys.n3, 0
+		.elseif keys.n4
+			.if _status == 2
+				.if _ipLen < 15
+					mov eax, _ipLen
+					mov _ipStr[eax], '4'
+					inc _ipLen
+				.endif
+			.endif
+			mov keys.n4, 0
+		.elseif keys.n5
+			.if _status == 2
+				.if _ipLen < 15
+					mov eax, _ipLen
+					mov _ipStr[eax], '5'
+					inc _ipLen
+				.endif
+			.endif
+			mov keys.n5, 0
+		.elseif keys.n6
+			.if _status == 2
+				.if _ipLen < 15
+					mov eax, _ipLen
+					mov _ipStr[eax], '6'
+					inc _ipLen
+				.endif
+			.endif
+			mov keys.n6, 0
+		.elseif keys.n7
+			.if _status == 2
+				.if _ipLen < 15
+					mov eax, _ipLen
+					mov _ipStr[eax], '7'
+					inc _ipLen
+				.endif
+			.endif
+			mov keys.n7, 0
+		.elseif keys.n8
+			.if _status == 2
+				.if _ipLen < 15
+					mov eax, _ipLen
+					mov _ipStr[eax], '8'
+					inc _ipLen
+				.endif
+			.endif
+			mov keys.n8, 0
+		.elseif keys.n9
+			.if _status == 2
+				.if _ipLen < 15
+					mov eax, _ipLen
+					mov _ipStr[eax], '9'
+					inc _ipLen
+				.endif
+			.endif
+			mov keys.n9, 0
+		.elseif keys.point
+			.if _status == 2
+				.if _ipLen < 15
+					mov eax, _ipLen
+					mov _ipStr[eax], '.'
+					inc _ipLen
+				.endif
+			.endif
+			mov keys.point, 0
 		.endif 
 		ret
 _ComeputeGameLogic	endp
