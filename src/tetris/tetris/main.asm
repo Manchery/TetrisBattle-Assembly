@@ -38,6 +38,15 @@ TIMER_MAIN_INTERVAL		equ		10;ms
 ; TODO 如果添加了新资源标识符，请从resource.h将其*复制*到此处。
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 IDB_BITMAP_TEST         equ	    101
+IDB_BITMAP_BG1			equ		104
+IDB_BITMAP_BG2          equ     105
+IDB_BITMAP_BG4          equ     106
+IDB_BITMAP_BLACK        equ     107
+IDB_BITMAP_BOOM         equ     108
+IDB_BITMAP_SKIP         equ     109
+IDB_BITMAP_SPECIAL      equ     110
+IDB_BITMAP_SQUARE       equ     112
+IDB_BITMAP_SPEED        equ     113
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 数据段
@@ -63,6 +72,7 @@ KeyState	ends
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 keys		KeyState	<>
+_status		dword	0
 hInstance	dd		?
 hWinMain	dd		?
 dwCenterX	dd		?	;圆心X
@@ -73,6 +83,15 @@ dwRadius	dd		?	;半径
 ;	图片资源
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 bgTest		dword	0
+_bg1		dword	0
+_bg2		dword	0	
+_bg4		dword	0
+_black		dword	0
+_boom		dword	0
+_skip		dword	0	
+_special	dword	0		
+_square		dword	0
+_speed		dword	0
 
 		.const
 szClassName	db	'Tetris: the game',0
@@ -472,9 +491,6 @@ _DrawLine	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _DrawCustomizedBackground	proc _hDC
 		local @hBmpBack, @hDcBack ; 'Back' for 'background'. 
-		.if	keys.down == 0
-			ret
-		.endif
 		;todo demo How to index an array.
 		;mov		eax,	1
 		;mov		ecx,	type NetworkMsg
@@ -482,8 +498,13 @@ _DrawCustomizedBackground	proc _hDC
 		;mov		inputQueue.msgs[eax].sender, 233
 		invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
 		mov		@hDcBack, eax
-		invoke	SelectObject, @hDcBack, bgTest; 将图片绑定到DC，这样，图片才能被操作
+		.if	_status == 0
+			invoke	SelectObject, @hDcBack, _bg1; 将图片绑定到DC，这样，图片才能被操作
+		.elseif _status ==1
+			invoke	SelectObject, @hDcBack, bgTest; 将图片绑定到DC，这样，图片才能被操作
+		.endif
 		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @hDcBack,0,0,SRCCOPY ; 通过DC读取图片，复制到hDC，从而完成显示
+
 		invoke	DeleteDC, @hDcBack ;回收资源（DC）
 		; For your ref:我应该使用DeleteDC还是ReleaseDC?
 		; https://www.cnblogs.com/vranger/p/3564606.html
@@ -645,6 +666,24 @@ _InitGame	proc  _hWnd
 		;加载资源
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_TEST; 加载图片到bgTest
 		mov		bgTest, eax		;以后，每当要使用资源，就调用bgTest
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG1
+		mov		_bg1, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG2
+		mov		_bg2, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG4
+		mov		_bg4, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BLACK
+		mov		_black, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BOOM
+		mov		_boom, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_SKIP
+		mov		_skip, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_SPECIAL
+		mov		_special, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_SQUARE
+		mov		_square, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_SPEED
+		mov		_speed, eax		
 		;TODO 如果你们愿意的话，可以考虑把所有背景相关的变量搞个结构体
 		;但其实意义不大，因为我的VS没有自动补全
 
