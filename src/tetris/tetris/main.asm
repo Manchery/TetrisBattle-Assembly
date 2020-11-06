@@ -172,7 +172,7 @@ _Connect	proc
 		.if	eax ==	SOCKET_ERROR
 			invoke	WSAGetLastError
 			.if eax != WSAEWOULDBLOCK
-				invoke	MessageBox,hWinMain,addr szErrConnect,NULL,MB_OK or MB_ICONSTOP
+				;invoke	MessageBox,hWinMain,addr szErrConnect,NULL,MB_OK or MB_ICONSTOP
 				jmp	_Err
 			.endif
 		.endif
