@@ -691,14 +691,274 @@ _InitGame	proc  _hWnd
 _InitGame	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+.data
+
+_map dword 200 dup(0)
+
+_currentColor dword 1
+_currentBlock dword -1
+_currentStatus dword 0
+_nextColor dword 1
+_nextBlock dword 1
+
+_currentPosI dword -2
+_currentPosJ dword 3
+
+.const 
+
+;_blockInitPos dword
+
+_mapHeight EQU 20
+_mapWidth EQU 10
+_blockSideLength EQU 40
+_mapOffsetX EQU 20
+_mapOffsetY EQU 20
+
+_blockOffset  dword	2,0, 2,1, 2,2, 2,3 ;I
+dword				0,2, 1,2, 2,2, 3,2
+dword					2,0, 2,1, 2,2, 2,3
+dword					0,1, 1,1, 2,1, 3,1
+
+dword					0,0, 1,0, 1,1, 1,2 ;J
+	dword				0,1, 0,2, 1,1, 2,1
+		dword			1,0, 1,1, 1,2, 2,2
+			dword		0,1, 1,1, 2,0, 2,1
+
+			dword		0,2, 1,0, 1,1, 1,2;L
+				dword	0,1, 1,1, 2,1, 2,2
+			dword		1,0, 1,1, 1,2, 2,0
+			dword		0,0, 0,1, 1,1, 2,1
+
+				dword	0,0, 0,1, 1,0, 1,1;O
+				dword	0,0, 0,1, 1,0, 1,1
+					dword 0,0, 0,1, 1,0, 1,1
+					dword 0,0, 0,1, 1,0, 1,1
+
+dword					0,1, 0,2, 1,0, 1,1;S
+dword					0,1, 1,1, 1,2, 2,2
+	dword				1,1, 1,2, 2,0, 2,1
+		dword			0,0, 1,0, 1,1, 2,1
+
+		dword			0,1, 1,0, 1,1, 1,2;T
+			dword		0,1, 1,1, 1,2, 2,1
+			dword		1,0, 1,1, 1,2, 2,1
+			dword		0,1, 1,0, 1,1, 2,1
+
+			dword		0,0, 0,1, 1,1, 1,2;Z
+			dword		0,2, 1,1, 1,2, 2,1
+			dword		1,0, 1,1, 2,1, 2,2
+			dword		0,1, 1,0, 1,1, 2,0
+
+_blockInitPos dword	-2,3; I
+dword					0,4;J
+dword					0,4;L
+dword					0,4;O
+dword					0,4;S
+dword					0,4;T
+dword					0,4;Z
+
+.code
+
+_GetMap proc _i,_j
+	push ecx
+	mov eax, _i
+	mov ecx, _mapWidth
+	mul ecx
+	mov ecx, _j
+	add eax, ecx
+	mov eax, _map[eax*4]
+	pop ecx
+	ret
+_GetMap endp
+
+_DrawSquare proc _hDC, _i, _j, _color
+	
+	.if (_i>=0) && (_i<_mapHeight) && (_j>=0) && (_j<_mapWidth)
+		pushad
+
+		.if _color==0
+			invoke	GetStockObject,BLACK_BRUSH
+		.else
+			invoke	GetStockObject,WHITE_BRUSH
+		.endif
+
+		invoke	SelectObject,_hDC, eax
+		invoke	DeleteObject, eax
+
+		;准备 left, top, right, bottom
+		mov eax, _i
+		mov ecx, _blockSideLength
+		mul ecx
+		mov ebx, eax
+		add ebx, _mapOffsetY
+		mov eax, _j
+		mul ecx
+		add eax, _mapOffsetY
+		mov ecx, eax
+		add ecx, _blockSideLength
+		mov edx, ebx
+		add edx, _blockSideLength
+
+		invoke	Rectangle, _hDC, eax, ebx, ecx, edx
+
+		popad
+	.endif
+	ret
+_DrawSquare endp
+
+_PositionValid proc _block, @status, _posI, _posJ
+	local	@i
+
+	pushad
+
+	mov eax, _block
+	mov ecx, 4
+	mul ecx
+	add eax, @status
+	mov ecx, 8
+	mul ecx
+
+	mov @i, 0
+	.while @i < 4
+		mov ecx, _posI
+		add ecx, _blockOffset[eax * 4]
+		add eax, 1
+		mov edx, _posJ
+		add edx, _blockOffset[eax * 4]
+		add eax, 1
+		;(ecx, edx) 目标检查位置
+
+		;TODO: 负数下溢
+		.if (ecx>=_mapHeight) || (ecx<0) || (edx<0) || (edx>=_mapWidth)
+			jmp _PositionValidFail
+		.endif
+		
+		push eax	; 乘法修改 eax
+		push edx	; 乘法修改 edx
+
+		mov eax, ecx
+		mov esi, _mapWidth
+		mul esi
+		pop edx		; 乘法修改 edx
+		add eax, edx
+		mov ebx, _map[eax*4] ; eax = ecx*_mapWidth + edx
+		pop eax		; 乘法修改 eax
+
+		.if (ebx!=0)
+			jmp _PositionValidFail
+		.endif
+		
+		inc @i
+	.endw
+
+	popad 
+	mov eax, 1
+	ret
+
+_PositionValidFail:
+	popad 
+	mov eax, 0
+	ret
+_PositionValid endp
+
+;假设位置合法
+_WriteMap proc _block, @status, _posI, _posJ, _color
+	local	@i
+
+	pushad
+
+	mov eax, _block
+	mov ecx, 4
+	mul ecx
+	add eax, @status
+	mov ecx, 8
+	mul ecx
+
+	mov @i, 0
+	.while @i < 4
+		mov ecx, _posI
+		add ecx, _blockOffset[eax * 4]
+		add eax, 1
+		mov edx, _posJ
+		add edx, _blockOffset[eax * 4]
+		add eax, 1
+		
+		push eax	; 乘法修改 eax
+		push edx	; 乘法修改 edx
+
+		mov eax, ecx
+		mov esi, _mapWidth
+		mul esi
+		pop edx		; 乘法修改 edx
+		add eax, edx
+		
+		mov ebx, _color
+		mov _map[eax*4], ebx ; eax = ecx*_mapWidth + edx
+
+		pop eax		; 乘法修改 eax
+		inc @i
+	.endw
+
+	popad 
+	ret
+_WriteMap endp
+
+
+_TryMove proc _deltaI, _deltaJ
+	push ebx
+	push ecx
+
+	mov ecx, _deltaI
+	add ecx, _currentPosI
+	mov ebx, _deltaJ
+	add ebx, _currentPosJ
+
+	invoke _PositionValid, _currentBlock, _currentStatus, ecx, ebx
+
+	.if eax!=0
+		mov _currentPosI, ecx
+		mov _currentPosJ, ebx
+		mov eax, 1
+	.else
+		mov eax, 0
+	.endif
+
+	pop ecx
+	pop ebx
+	ret
+_TryMove endp
+
+
+_TryChangeStatus proc
+	push ecx
+	mov ecx, _currentStatus
+	inc ecx
+	.if ecx>=4
+		sub ecx, 4
+	.endif
+
+	invoke _PositionValid, _currentBlock, ecx, _currentPosI, _currentPosJ
+
+	.if eax != 0
+		mov _currentStatus, ecx
+		mov eax, 1
+	.else
+		mov eax, 0
+	.endif
+
+	pop ecx
+	ret
+_TryChangeStatus endp
+
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _OnPaint	proc	_hWnd,_hDC
 		local	@stTime:SYSTEMTIME, @bufferDC; bufferDC is cache for pictures.
 		local	@bufferBmp
+		local	@i
+		local	@j
 
 		pushad
-		invoke	GetLocalTime,addr @stTime
-		invoke	_CalcClockParam
 ;********************************************************************
 ; 启用双缓冲绘图方式，避免界面闪烁
 ;********************************************************************
@@ -707,49 +967,44 @@ _OnPaint	proc	_hWnd,_hDC
 		invoke	CreateCompatibleBitmap, _hDC, WINDOW_WIDTH, WINDOW_HEIGHT
 		mov		@bufferBmp,	eax
 		invoke	SelectObject, @bufferDC, @bufferBmp
+
 ;********************************************************************
-; Customized 画一个自定义背景
+; 画地图
 ;********************************************************************
-		invoke _DrawCustomizedBackground, @bufferDC
-;********************************************************************
-; 画时钟圆周上的点
-;********************************************************************
-		invoke	GetStockObject,WHITE_BRUSH
-		invoke	SelectObject,@bufferDC,eax
-		invoke	_DrawDot,@bufferDC,360/12,3	;画12个大圆点
-		invoke	_DrawDot,@bufferDC,360/60,1	;画60个小圆点
-;********************************************************************
-; 画时钟指针
-;********************************************************************
-		invoke	CreatePen,PS_SOLID,1,0FFFFFFh
-		invoke	SelectObject,@bufferDC,eax
-		invoke	DeleteObject,eax
-		movzx	eax,@stTime.wSecond
-		mov	ecx,360/60
-		mul	ecx			;秒针度数 = 秒 * 360/60
-		invoke	_DrawLine,@bufferDC,eax,15
-;********************************************************************
-		invoke	CreatePen,PS_SOLID,2,0FFFFFFh
-		invoke	SelectObject,@bufferDC,eax
-		invoke	DeleteObject,eax
-		movzx	eax,@stTime.wMinute
-		mov	ecx,360/60
-		mul	ecx			;分针度数 = 分 * 360/60
-		invoke	_DrawLine,@bufferDC,eax,20
-;********************************************************************
-		invoke	CreatePen,PS_SOLID,3,0FFFFFFh
-		invoke	SelectObject,@bufferDC,eax
-		invoke	DeleteObject,eax
-		movzx	eax,@stTime.wHour
-		.if	eax >=	12
-			sub	eax,12
+
+		mov @i, 0
+
+		.while @i < _mapHeight
+			mov @j, 0
+			.while @j < _mapWidth
+				invoke _GetMap, @i, @j
+				invoke _DrawSquare, @bufferDC, @i, @j, eax
+				inc @j
+			.endw
+			inc @i
+		.endw
+
+		.if _currentBlock != -1
+			mov eax, _currentBlock
+			mov ecx, 4
+			mul ecx
+			add eax, _currentStatus
+			mov ecx, 8
+			mul ecx
+
+			mov @i, 0
+			.while @i < 4
+				mov ecx, _currentPosI
+				add ecx, _blockOffset[eax * 4]
+				add eax, 1
+				mov edx, _currentPosJ
+				add edx, _blockOffset[eax * 4]
+				add eax, 1
+
+				invoke _DrawSquare, @bufferDC, ecx, edx, _currentColor
+				inc @i
+			.endw
 		.endif
-		mov	ecx,360/12
-		mul	ecx
-		movzx	ecx,@stTime.wMinute
-		shr	ecx,1
-		add	eax,ecx
-		invoke	_DrawLine,@bufferDC,eax,30
 ;********************************************************************
 ;		把缓存绘制到hDC上
 ;********************************************************************
@@ -764,47 +1019,175 @@ _OnPaint	proc	_hWnd,_hDC
 
 _OnPaint	endp
 
+.data 
+
+_readyNext dd 1
+_sinceLastMoveDown dd 0
+
+_moveDownInternal dd 50
+
+_scores dd 0
+
+.code
+
+_ReduceLines proc 
+	local @i, @j, @k
+
+	pushad
+
+	mov @i, _mapHeight
+	dec @i
+	mov @j, _mapHeight
+	dec @j
+
+	.while @i != -1
+		mov eax, @i
+		mov ebx, _mapWidth
+		mul ebx
+		mov esi, eax ; @i行开头
+		push esi
+
+		mov eax, 1
+
+		mov @k, 0
+		.while @k < _mapWidth
+			mov ebx, _map[esi * 4]
+			.if ebx==0
+				mov eax, 0
+				.break
+			.endif
+			inc @k
+			inc esi
+		.endw
+
+		pop esi
+		
+		.if eax!=1
+			mov eax, @j
+			mov ebx, _mapWidth
+			mul ebx
+			mov edi, eax ; @j行开头
+
+			.if esi!=edi
+				mov @k, 0
+				.while @k < _mapWidth
+					mov ebx, _map[esi * 4]
+					mov _map[edi * 4], ebx
+					inc @k
+					inc esi
+					inc edi
+				.endw
+			.endif
+
+			dec @j
+		.else
+			add _scores, 100 
+		.endif
+
+		dec @i
+	.endw
+	
+	.while @j != -1
+		mov eax, @j
+		mov ebx, _mapWidth
+		mul ebx
+		mov edi, eax ; @j行开头
+
+		mov @k, 0
+		.while @k < _mapWidth
+			mov _map[edi * 4], 0
+			inc @k
+			inc edi
+		.endw
+
+		dec @j
+	.endw
+
+	popad
+	ret
+_ReduceLines endp
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ComeputeGameLogic	proc  _hWnd
-		local @testNetworkMsg:NetworkMsg
-		;TODO 在这里写游戏的逻辑
+		pushad 
+		
+		inc _sinceLastMoveDown
 
-		;下面是(离线)测试网络相关API的函数
-		;一旦测试全部通过，这些代码就会被移除
-		;它们也可以用来测试按键的行为：
-		;当debug时，按键松开事件不能收到，因此需要手动重置按键状态
-		.if keys.right;按右，就接收3条Input消息到缓冲中
-			mov edi, offset readBuffer
-			add edi, readBfCnt
-			mov eax, testStrlen
-			add	readBfCnt, eax
-			invoke _CopyMemory, edi, offset testString, testStrlen
-			mov keys.right, 0
-		.elseif FALSE;keys.left;按左，把inputBuffer解析到结构体中
-			invoke _RecvData;, offset readBuffer, readBfCnt
-			mov keys.left, 0
-			mov	eax, eax
-		.elseif keys.up;按上，模拟取走一条Input消息
-		;按上建立连接
+		.if _readyNext==1
+			.if _currentBlock != -1
+				invoke _WriteMap, _currentBlock, _currentStatus, _currentPosI, _currentPosJ, _currentColor
+				invoke _ReduceLines
+			.endif
+
+			mov eax, _nextBlock
+			mov _currentBlock, eax
+			mov eax, _nextColor
+			mov _currentColor, eax
+			mov _currentStatus, 0
+			
+			mov ebx, _currentBlock
+			mov eax, _blockInitPos[ebx * 8]
+			mov _currentPosI, eax
+			mov eax, _blockInitPos[ebx * 8 + 4]
+			mov _currentPosJ, eax
+
+			invoke _PositionValid, _currentBlock, _currentStatus, _currentPosI, _currentPosJ
+			.if eax==0
+				;TODO: gameover
+			.endif
+			
+			inc _nextBlock
+			.if _nextBlock >= 7
+				sub _nextBlock, 7
+			.endif
+			mov _nextColor, 1
+
+			mov _readyNext, 0
+		.endif
+
+		
+		mov eax, _sinceLastMoveDown
+		.if eax >=_moveDownInternal
+			invoke _TryMove, 1, 0
+			mov _sinceLastMoveDown, 0
+			.if eax==0
+				mov _readyNext, 1
+			.endif
+		.endif
+
+;********************************************************************
+; 处理按键消息
+;********************************************************************
+		.if keys.up!=0
 			mov keys.up, 0
-			invoke _Connect
-			mov	eax, eax
-		.elseif keys.space;按空格，生成两个总长度为7的Output消息，并在网络上发送
-			invoke _QueuePop, offset inputQueue, addr @testNetworkMsg
-			mov	@testNetworkMsg.inst, 233
-			mov	@testNetworkMsg.sender, 15
-			mov	@testNetworkMsg.recver, 25
-			mov @testNetworkMsg.msglen, 3
-			invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
-			invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
-			invoke _SendData
-			mov	eax, eax
-			mov keys.space, 0
-		.elseif keys.return;按回车，模拟在网络上发送一次数据
-			invoke _SendData
-			mov	eax, eax
-			mov keys.return, 0
-		.endif 
+			invoke _TryChangeStatus
+		.endif
+
+		.if keys.left!=0
+			mov keys.left, 0
+			.if _readyNext==0
+				invoke _TryMove, 0, -1
+			.endif
+		.endif
+
+		.if keys.right!=0
+			mov keys.right, 0
+			.if _readyNext==0
+				invoke _TryMove, 0, 1
+			.endif
+		.endif
+
+		.if keys.down!=0
+			mov keys.down, 0
+			.if _readyNext==0
+				invoke _TryMove, 1, 0
+				.if eax==1
+					mov _sinceLastMoveDown, 0
+				.endif
+			.endif
+		.endif
+
+		popad
 		ret
 _ComeputeGameLogic	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
