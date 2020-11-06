@@ -50,6 +50,7 @@ def start_tcp_server(ip, port):
     while True:
         print("waiting for connection")
         client, addr = sock.accept()
+        client.send(bytes([4, 1, 2, 3, 4]))
         print("having a connection")
         break
     msg = 'welcome to tcp server' + "\r\n"

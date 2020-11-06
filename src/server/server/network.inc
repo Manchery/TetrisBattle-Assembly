@@ -6,7 +6,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 TCP_PORT				equ		10086;Server will need to listen on 10086.
 NETWORK_BUFFER_LENGTH	equ		8192
-;todo change 4 to 128. 4 is used for debugging.
 NETWORK_MSGBUF_LENGTH	equ		256;任意时刻，最多可有256条未读消息和未发消息。
 MAX_PLAYERS				equ		4;最大的可支持的玩家数量
 WM_SOCKET				equ		WM_USER + 100
@@ -24,7 +23,6 @@ NetworkMsg	ends
 ;  逻辑层不要操作这里的任何内容
 ;  总是调用提供的接口收、发数据
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-serverIpAddr	db		    '0.0.0.0', 0	;use localhost to test network
 hSocket			dd			?
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -42,7 +40,6 @@ MsgQueue	struct;收发队列均用该结构体
 	head	dword			0;队列头
 MsgQueue	ends
 
-
 Client			struct
 	readBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)
 	writeBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)
@@ -50,12 +47,16 @@ Client			struct
 	readBfCnt		dword		0
 	writeBfCnt		dword		0
 Client			ends
+
 inputQueue		MsgQueue	<>
 _playerMsgs		Client		MAX_PLAYERS dup(<>)
-_sockets		dword		0 dup(MAX_PLAYERS)
+;_sockets可同时用来判断连接状态
+;如果_sockets == 0，就代表已断开连接
+;因此，总是需要及时清空_sockets.
+_sockets		dword		0 dup(MAX_PLAYERS) 
+_playerAlive	dword		0 dup(MAX_PLAYERS)
 
 		.const
-szSpar		db	' : ',0
 typeNetworkMsg dword type NetworkMsg
 testString  db  5, 'abcde', 3, 20, 30, 40, 4, '1234' 
 testStrlen  dword 15
@@ -72,5 +73,6 @@ _CopyMemory	proc uses esi edi ecx, _dest, _src, len
 	rep		movsb
 	ret
 _CopyMemory	endp
+
 
 ;Hint 如果修改了这个文件中的变量，需要重新生成项目
