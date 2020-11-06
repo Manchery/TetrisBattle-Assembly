@@ -88,7 +88,6 @@ KeyState	ends
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 keys		KeyState	<>
-_status		dword	0
 _page		dword	0
 _ipLen		dword	0
 _ipStr		db		?
@@ -933,7 +932,7 @@ _ComputeGameLogic	proc  _hWnd
 			.if keys.return
 				invoke	RtlZeroMemory,addr serverIpAddr,sizeof serverIpAddr
 				invoke _CopyMemory,addr serverIpAddr,addr _ipStr,_ipLen
-				invoke _Connect
+				invoke _Connect, _hWnd
 				mov _page, MULTIPLE_READY_PAGE
 				mov keys.return, 0
 			.elseif keys.back
