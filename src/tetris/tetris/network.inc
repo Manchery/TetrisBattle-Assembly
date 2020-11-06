@@ -23,7 +23,7 @@ NetworkMsg	ends
 ;  逻辑层不要操作这里的任何内容
 ;  总是调用提供的接口收、发数据
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-serverIpAddr	db		    '127.0.0.1', 0	;use localhost to test network
+serverIpAddr	db		    '127.0.0.1', 0, 10 DUP(0) 	;use localhost to test network
 hSocket			dd			?
 readBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)
 writeBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)

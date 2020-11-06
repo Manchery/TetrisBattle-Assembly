@@ -42,13 +42,11 @@ IDB_BITMAP_BG1			equ		104
 IDB_BITMAP_BG2          equ     105
 IDB_BITMAP_BG3          equ     123
 IDB_BITMAP_BG4          equ     106
-IDB_BITMAP_BLACK        equ     107
-IDB_BITMAP_BOOM         equ     108
-IDB_BITMAP_SKIP         equ     109
-IDB_BITMAP_SPECIAL      equ     110
-IDB_BITMAP_SQUARE       equ     112
-IDB_BITMAP_SPEED        equ     113
-IDB_BITMAP_IP           equ     125
+IDB_BITMAP_BG5          equ     127
+IDB_BITMAP_BGWAIT       equ     128
+IDB_BITMAP_STOP         equ     129
+IDB_BITMAP_SQUARE       equ     130
+IDB_BITMAP_BGREADY      equ     131
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 数据段
@@ -82,7 +80,7 @@ KeyState	ends
 keys		KeyState	<>
 _status		dword	0
 _ipLen		dword	0
-_ipStr		BYTE	20  DUP(0)
+_ipStr		db		?
 hInstance	dd		?
 hWinMain	dd		?
 dwCenterX	dd		?	;圆心X
@@ -97,13 +95,11 @@ _bg1		dword	0
 _bg2		dword	0	
 _bg3		dword	0	
 _bg4		dword	0
-_black		dword	0
-_boom		dword	0
-_skip		dword	0	
-_special	dword	0		
+_bg5		dword	0	
+_bgwait		dword	0
+_bgready	dword	0
+_stop		dword	0
 _square		dword	0
-_speed		dword	0
-_ip			dword	0
 
 
 		.const
@@ -524,6 +520,12 @@ _DrawCustomizedBackground	proc _hDC
 			invoke TextOutA, @hDcBack, 500, 380, addr _ipStr, _ipLen
 		.elseif _status == 3
 			invoke	SelectObject, @hDcBack, _bg4
+		.elseif _status == 4
+			invoke	SelectObject, @hDcBack, _bg5
+		.elseif _status == 5
+			invoke	SelectObject, @hDcBack, _bgready
+		.elseif _status == 6
+			invoke	SelectObject, @hDcBack, _bgwait
 		.endif
 		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @hDcBack,0,0,SRCCOPY ; 通过DC读取图片，复制到hDC，从而完成显示
 
@@ -708,20 +710,16 @@ _InitGame	proc  _hWnd
 		mov		_bg3, eax		
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG4
 		mov		_bg4, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_BLACK
-		mov		_black, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_BOOM
-		mov		_boom, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_SKIP
-		mov		_skip, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_SPECIAL
-		mov		_special, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG5
+		mov		_bg5, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BGWAIT
+		mov		_bgwait, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BGREADY
+		mov		_bgready, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_STOP
+		mov		_stop, eax		
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_SQUARE
 		mov		_square, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_SPEED
-		mov		_speed, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_IP
-		mov		_ip, eax		
 		;TODO 如果你们愿意的话，可以考虑把所有背景相关的变量搞个结构体
 		;但其实意义不大，因为我的VS没有自动补全
 
@@ -811,51 +809,65 @@ _ComeputeGameLogic	proc  _hWnd
 		;一旦测试全部通过，这些代码就会被移除
 		;它们也可以用来测试按键的行为：
 		;当debug时，按键松开事件不能收到，因此需要手动重置按键状态
-		.if keys.right;按右，就接收3条Input消息到缓冲中
+		;.if keys.right;按右，就接收3条Input消息到缓冲中
+		;	mov edi, offset readBuffer
+		;	add edi, readBfCnt
+		;	mov eax, testStrlen
+		;	add	readBfCnt, eax
+		;	invoke _CopyMemory, edi, offset testString, testStrlen
+		;	mov keys.right, 0
+		;.elseif keys.left;keys.left;按左，把inputBuffer解析到结构体中
+		;	invoke _RecvData;, offset readBuffer, readBfCnt
+		;	mov keys.left, 0
+		;	mov	eax, eax
+		;	mov keys.left, 0
+		;.elseif keys.up;按上，模拟取走一条Input消息
+		;按上建立连接
+		;	mov keys.up, 0
+		;	invoke _Connect
+		;	mov	eax, eax
+		;.elseif keys.space;按空格，生成两个总长度为7的Output消息，并在网络上发送
+		;	invoke _QueuePop, offset inputQueue, addr @testNetworkMsg
+		;	mov	@testNetworkMsg.inst, 233
+		;	mov	@testNetworkMsg.sender, 15
+		;	mov	@testNetworkMsg.recver, 25
+		;	mov @testNetworkMsg.msglen, 3
+		;	invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
+		;	invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
+		;	invoke _SendData
+		;	mov	eax, eax
+		;	mov keys.space, 0
+		;.elseif keys.return
+		;	invoke _SendData
+		;	mov	eax, eax
+		;	mov keys.return, 0
+		;.endif
+
+		.if keys.right;按右键
 			.if _status == 0
 				mov _status, 1
 			.endif
-			mov edi, offset readBuffer
-			add edi, readBfCnt
-			mov eax, testStrlen
-			add	readBfCnt, eax
-			invoke _CopyMemory, edi, offset testString, testStrlen
 			mov keys.right, 0
-		.elseif keys.left;keys.left;按左，把inputBuffer解析到结构体中
+		.elseif keys.left;按左键
 			.if _status == 1
 				mov _status, 0
 			.endif
-			;invoke _RecvData;, offset readBuffer, readBfCnt
-			;mov keys.left, 0
-			;mov	eax, eax
-		.elseif keys.up;按上，模拟取走一条Input消息
-		;按上建立连接
-			mov keys.up, 0
-			invoke _Connect
-			mov	eax, eax
-		.elseif keys.space;按空格，生成两个总长度为7的Output消息，并在网络上发送
-			invoke _QueuePop, offset inputQueue, addr @testNetworkMsg
-			mov	@testNetworkMsg.inst, 233
-			mov	@testNetworkMsg.sender, 15
-			mov	@testNetworkMsg.recver, 25
-			mov @testNetworkMsg.msglen, 3
-			invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
-			invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
-			invoke _SendData
-			mov	eax, eax
-			mov keys.space, 0
-		.elseif keys.return;按回车，模拟在网络上发送一次数据
+			mov keys.left, 0
+		.elseif keys.return;按回车
 			.if _status == 0
 				mov _status, 3
 			.elseif _status == 1
 				mov _status, 2
 			.elseif _status == 2
-				mov _status, 3
+				invoke	RtlZeroMemory,addr serverIpAddr,sizeof serverIpAddr
+				invoke _CopyMemory,addr serverIpAddr,addr _ipStr,_ipLen
+				invoke _Connect
+				mov _status, 5
+			.elseif _status == 5
+				mov _status, 6
 			.endif
-			invoke _SendData
-			mov	eax, eax
 			mov keys.return, 0
-		.elseif keys.back
+		.elseif keys.back;按退格
 			.if _status == 2
 				.if _ipLen > 0
 					dec eax

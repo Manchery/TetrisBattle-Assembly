@@ -42,28 +42,22 @@
     <Image Include="resources\bg4.bmp">
       <Filter>资源文件</Filter>
     </Image>
-    <Image Include="resources\black.bmp">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="resources\boom.bmp">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="resources\skip.bmp">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="resources\special.bmp">
-      <Filter>资源文件</Filter>
-    </Image>
-    <Image Include="resources\speed.bmp">
-      <Filter>资源文件</Filter>
-    </Image>
     <Image Include="resources\square.bmp">
       <Filter>资源文件</Filter>
     </Image>
     <Image Include="resources\bg3.bmp">
       <Filter>资源文件</Filter>
     </Image>
-    <Image Include="resources\ip.bmp">
+    <Image Include="resources\bg5.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="resources\bgWait.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="resources\stop.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="resources\bgReady.bmp">
       <Filter>资源文件</Filter>
     </Image>
   </ItemGroup>
