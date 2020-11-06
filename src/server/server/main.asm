@@ -1,3 +1,4 @@
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; Sample code for < Win32ASM Programming 2nd Edition>
 ; by 罗云彬, http://asm.yeah.net
@@ -31,22 +32,12 @@ include		network.inc
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ICO_MAIN				equ		1000h
 ID_TIMER				equ		1
-WINDOW_WIDTH			equ		1200
-WINDOW_HEIGHT			equ		960
+WINDOW_WIDTH			equ		300
+WINDOW_HEIGHT			equ		200
 TIMER_MAIN_INTERVAL		equ		10;ms
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; TODO 如果添加了新资源标识符，请从resource.h将其*复制*到此处。
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-IDB_BITMAP_TEST         equ	    101
-IDB_BITMAP_BG1			equ		104
-IDB_BITMAP_BG2          equ     105
-IDB_BITMAP_BG3          equ     123
-IDB_BITMAP_BG4          equ     106
-IDB_BITMAP_BG5          equ     127
-IDB_BITMAP_BGWAIT       equ     128
-IDB_BITMAP_STOP         equ     129
-IDB_BITMAP_SQUARE       equ     130
-IDB_BITMAP_BGREADY      equ     131
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 数据段
@@ -55,34 +46,27 @@ IDB_BITMAP_BGREADY      equ     131
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; 结构体定义(注意对齐，或总是使用DWORD)
 KeyState	struct	;KeyState可识别上下左右、空格、ESC、数字1~6
-	up			dword	0
-	down		dword	0
-	left		dword	0
-	right		dword	0
-	space		dword	0
-	escape		dword	0
-	return		dword	0
-	n0			dword	0
-	n1			dword	0
-	n2			dword	0
-	n3			dword	0
-	n4			dword	0
-	n5			dword	0
-	n6			dword	0
-	n7			dword	0
-	n8			dword	0
-	n9			dword	0
-	back		dword	0
-	point		dword	0
+	up		dword	0
+	down	dword	0
+	left	dword	0
+	right	dword	0
+	space	dword	0
+	escape	dword	0
+	return	dword	0
+	n1		dword	0
+	n2		dword	0
+	n3		dword	0
+	n4		dword	0
+	n5		dword	0
+	n6		dword	0
 KeyState	ends
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 keys		KeyState	<>
 _status		dword	0
-_ipLen		dword	0
-_ipStr		db		?
 hInstance	dd		?
 hWinMain	dd		?
+hListenSocket	dd	?	;监听套接字，也使用WSASyncSelect监听accept事件
 dwCenterX	dd		?	;圆心X
 dwCenterY	dd		?	;圆心Y
 dwRadius	dd		?	;半径
@@ -93,17 +77,22 @@ dwRadius	dd		?	;半径
 bgTest		dword	0
 _bg1		dword	0
 _bg2		dword	0	
-_bg3		dword	0	
 _bg4		dword	0
-_bg5		dword	0	
-_bgwait		dword	0
-_bgready	dword	0
-_stop		dword	0
+_black		dword	0
+_boom		dword	0
+_skip		dword	0	
+_special	dword	0		
 _square		dword	0
+_speed		dword	0
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;	游戏状态
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+_onPlaying	dword	0;0 for notplay, 1 forplaying
+_players	dword	0;a count for players
 		.const
-szClassName	db	'Tetris: the game',0
+szClassName	db	'Tetris Server',0
+szErrBind	db	'绑定到TCP端口10086时出错，请检查是否有其它程序在使用!',0
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 代码段
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -112,71 +101,161 @@ szClassName	db	'Tetris: the game',0
 ; 断开连接
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _Disconnect	proc
-		.if	hSocket
-			invoke	closesocket,hSocket
+		local @cnt:dword
+		pushad
+
+		;清理缓冲区
+		mov inputQueue.len,		0
+
+		;断开监听套接字
+		.if	hListenSocket
+			invoke	closesocket,hListenSocket
 			xor	eax,eax
-			mov	hSocket,eax
+			mov	hListenSocket,eax
 		.endif
 
-		;清空缓冲区
-		mov readBfCnt,			0
-		mov writeBfCnt,			0
-		mov inputQueue.len,		0
-		mov outputQueue.len,	0
-		;不必须，但我担心有的时候把它当字符串处理，所以还是调了下RtlZeroMemory
-		invoke RtlZeroMemory, offset readBuffer,  NETWORK_BUFFER_LENGTH
-		invoke RtlZeroMemory, offset writeBuffer, NETWORK_BUFFER_LENGTH
+		mov esi, offset _sockets
+		mov edi, offset _playerMsgs
+		mov	@cnt, 0
+		.while @cnt < MAX_PLAYERS
+			.if (dword ptr [esi] != 0)
+				push esi
+				push edi
+				invoke	closesocket,[esi]
+				pop edi
+				pop esi
+				; 清空结构体等
+				mov (Client ptr [edi]).readBfCnt, 0
+				mov (Client ptr [edi]).writeBfCnt, 0
+				mov (Client ptr [edi]).outputQueue.len, 0
+				xor	eax,eax
+				mov	[esi],eax
+			.endif
+			add esi, 4
+			add edi, type Client
+			inc @cnt
+		.endw
 
 		;todo:
 		;用户在DisconnectScreen中按下空格回到主界面。i.e.
 		;invoke _ShowDisconnectScreen
+		popad
 		ret
 _Disconnect	endp
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 连接到服务器
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_Connect	proc
-		local	@stSin:sockaddr_in
+_StartListen proc	;_lParam;We dont need this params, for now.
+		local	@stSin:sockaddr_in, @on:dword
 
-		pushad
-		xor	eax,eax
-		;Todo what's a dbStep?
-		;mov	dbStep,al
-		mov	readBfCnt,eax
-		mov	writeBfCnt,eax
 ;********************************************************************
 ; 创建 socket
 ;********************************************************************
+		invoke	socket,AF_INET,SOCK_STREAM,0
+		mov	hListenSocket,eax
+
 		invoke	RtlZeroMemory,addr @stSin,sizeof @stSin
-		invoke	inet_addr,offset serverIpAddr
-		.if	eax ==	INADDR_NONE
-			invoke	MessageBox,hWinMain,addr szErrIP,NULL,MB_OK or MB_ICONSTOP
-			jmp	_Err
-		.endif
-		mov	@stSin.sin_addr,eax
-		mov	@stSin.sin_family,AF_INET
 		invoke	htons,TCP_PORT
 		mov	@stSin.sin_port,ax
-
-		invoke	socket,AF_INET,SOCK_STREAM,0
-		mov	hSocket,eax
-;********************************************************************
-; 将socket设置为非阻塞模式，连接到服务器
-;********************************************************************
-		invoke	WSAAsyncSelect,hSocket,hWinMain,WM_SOCKET,FD_CONNECT or FD_READ or FD_CLOSE or FD_WRITE
-		invoke	connect,hSocket,addr @stSin,sizeof @stSin
-		.if	eax ==	SOCKET_ERROR
-			invoke	WSAGetLastError
-			.if eax != WSAEWOULDBLOCK
-				;invoke	MessageBox,hWinMain,addr szErrConnect,NULL,MB_OK or MB_ICONSTOP
-				jmp	_Err
-			.endif
+		mov	@stSin.sin_family,AF_INET
+		mov	@stSin.sin_addr,INADDR_ANY
+		invoke	bind,hListenSocket,addr @stSin,sizeof @stSin
+		.if	eax
+			invoke	MessageBox,hWinMain,addr szErrBind,\;todo add a szErrBind str.
+				NULL,MB_OK or MB_ICONSTOP
+			invoke	ExitProcess,NULL
+			ret
 		.endif
+		mov	@on, 1
+		invoke	setsockopt, hListenSocket, SOL_SOCKET, SO_REUSEADDR, addr @on, type @on
+		.if	eax
+			invoke	MessageBox,hWinMain,addr szErrBind,\;todo add a szErrBind str.
+				NULL,MB_OK or MB_ICONSTOP
+			invoke	ExitProcess,NULL
+			ret
+		.endif
+;********************************************************************
+; 开始监听，等待连接进入并为每个连接更新状态
+;********************************************************************
+		;设置监听套接字的最大队列数量及将其加入到消息循环中
+		;绑定到WSASyncSelect之后用事件响应连入操作。
+		;FD_CLOSE大概要判断下是不是监听套接字。如果是监听套接字就退出程序(或重连)吧。
+		invoke	listen,hListenSocket,100
+		invoke	WSAAsyncSelect,hListenSocket,hWinMain,WM_SOCKET,FD_ACCEPT or FD_CLOSE
+		;下面的代码不在此处处理。
+		;所以除了最后退出程序之外，貌似没有必要提前关闭hListenSocket
+		;TODO:这句要注释
+		;invoke	closesocket,hListenSocket
 		ret
-_Err:
-		invoke	_Disconnect
+_StartListen	endp
+
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 响应连接到服务器的事件：一次一条
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_OnSocketAccept proc
+		;响应接入的连接
+		.if (_onPlaying == 0) && (_players < MAX_PLAYERS) 
+			invoke	accept,hListenSocket,NULL,0
+			.if eax == INVALID_SOCKET
+				ret
+			.endif
+			mov edi, offset _sockets
+			mov ebx, _players
+			lea edi, [edi + 4 * ebx]
+			mov [edi], eax
+			invoke	WSAAsyncSelect,eax,hWinMain,WM_SOCKET,FD_READ or FD_WRITE or FD_CLOSE
+			inc _players
+		.endif
+		;并不是，我们只有通过关闭套接字的方式才能阻止新传入的连接...
+		;回上面。。但也不一定。。就让它们在队列里等着不香嘛233
+		;所以除了最后退出程序之外，貌似没有必要提前关闭hListenSocket
+		;所以下面这句应该放在程序退出前
+		;invoke	closesocket,hListenSocket
 		ret
-_Connect	endp
+_OnSocketAccept	endp
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 响应关闭事件
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_OnSocketClose proc @closedSocket
+		local @cnt
+		mov eax, @closedSocket
+		.if(eax == hListenSocket)
+			;监听服务器已关闭
+			;关闭所有余下链接，终止服务器
+			;TODO:关闭所有余下链接
+			invoke closesocket, hListenSocket
+			invoke ExitProcess, 0
+		.endif
+		;用户连接已关闭
+		;直接清空这个连接即可
+		mov esi, offset _sockets
+		mov edi, offset _playerMsgs
+		mov	@cnt, 0
+		.while @cnt < MAX_PLAYERS
+			mov eax, @closedSocket
+			.if (dword ptr [esi] != 0) && (eax == [esi])
+				push esi
+				push edi
+				invoke	closesocket,[esi]
+				pop edi
+				pop esi
+				; 清空结构体等
+				mov (Client ptr [edi]).readBfCnt, 0
+				mov (Client ptr [edi]).writeBfCnt, 0
+				mov (Client ptr [edi]).outputQueue.len, 0
+				xor	eax,eax
+				mov	[esi],eax
+				.break
+			.endif
+			add esi, 4
+			add edi, type Client
+			inc @cnt
+		.endw
+		ret
+_OnSocketClose	endp
 
 
 
@@ -294,14 +373,38 @@ _ProcessMsg	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 接收数据包
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_RecvData	proc
+_RecvData	proc @socket
 		local	@tmpBuffer[512]:byte, @msgLength
+		local	@playerMsg, @socketaddr, @cnt
 
 		pushad
+		;计算读结构体的位置
+		mov esi, offset _sockets
+		mov edi, offset _playerMsgs
+		mov	@cnt, 0
+		.while @cnt < MAX_PLAYERS
+			mov eax, @socket
+			.if eax == [esi]
+				mov @playerMsg, edi
+				mov @socketaddr, esi
+				.break
+			.endif
+			add esi, 4
+			add edi, type Client
+			inc @cnt
+		.endw
+		;没有找到指定结构体
+		.if @cnt == MAX_PLAYERS
+			ret
+		.endif
+
 		;将esi指向接收缓冲区中下一个可写的位置
 		;ecx是缓冲区中已有的数据长度。
-		mov	esi,offset readBuffer
-		mov	ecx,readBfCnt
+		mov ebx, @playerMsg
+		lea edx, (Client ptr [ebx]).readBuffer
+		mov	esi, edx
+		lea edx, (Client ptr [ebx]).readBfCnt
+		mov	ecx, edx
 		add	esi,ecx
 ;********************************************************************
 		;将eax指向剩余可用的全部缓冲区大小
@@ -309,19 +412,20 @@ _RecvData	proc
 		mov	eax, NETWORK_BUFFER_LENGTH
 		sub	eax, ecx
 		;added for debug/test
-		;jmp _Recved;added for debug/test
+		jmp _Recved;added for debug/test
 		.if	eax ;这个判断实际上是不必要的，
 				;因为一次读取+处理后总不可能剩余超过255B，
 				;而缓冲区有8192B.
-			invoke	recv,hSocket,esi,eax,NULL
+			invoke	recv,@socket,esi,eax,NULL
 			.if	eax ==	SOCKET_ERROR
 				invoke	WSAGetLastError
 				.if	eax !=	WSAEWOULDBLOCK
-					invoke	_Disconnect
+					invoke	_OnSocketClose, @socket
 				.endif
 				jmp	_Ret
 			.endif
-			add	readBfCnt,eax
+			mov ebx, @playerMsg
+			add(Client ptr [ebx]).readBfCnt, eax
 		.endif
 ;********************************************************************
 ; 如果整个数据包接收完毕，则进行处理
@@ -329,22 +433,26 @@ _RecvData	proc
 _Recved:
 		;while循环解决可能存在的粘包现象。
 		;将esi定位到buffer头部
-		mov	esi, offset readBuffer
-		.while readBfCnt > 0
+		lea edx, (Client ptr [ebx]).readBuffer
+		mov	esi, edx
+		;todo check if this is fine
+		.while dword ptr (Client ptr [ebx]).readBfCnt > 0
 			movzx	eax, byte ptr[esi];获取下一条消息的长度
 			mov		@msgLength, eax
 			inc		eax;将readBuffer[0]计算在内
-			.break .if eax > readBfCnt;收到的信息不完整，返回，等待下次接收
-			sub		readBfCnt, eax;readBfCnt -= Current Msg Length
+			.break .if eax > dword ptr (Client ptr [ebx]).readBfCnt;收到的信息不完整，返回，等待下次接收
+			sub		(Client ptr [ebx]).readBfCnt, eax;readBfCnt -= Current Msg Length
 			inc		esi
-			invoke	_ProcessMsg, esi, @msgLength; ProcessMsg将保存esi.
+			invoke	_ProcessMsg, esi, @msgLength; ProcessMsg将保存esi和ebx.
 			add		esi, @msgLength
 		.endw
 		
 		;如果还有剩余的字符串，就把它复制到buffer头部。
-		.if	readBfCnt > 0
-			invoke	_CopyMemory, addr @tmpBuffer, esi, readBfCnt
-			invoke  _CopyMemory, offset readBuffer, addr @tmpBuffer, readBfCnt
+		.if	dword ptr (Client ptr [ebx]).readBfCnt > 0
+			push ebx
+			invoke	_CopyMemory, addr @tmpBuffer, esi, (Client ptr[ebx]).readBfCnt
+			pop ebx
+			invoke  _CopyMemory, addr (Client ptr [ebx]).readBuffer, addr @tmpBuffer, (Client ptr[ebx]).readBfCnt
 		.endif
 ;********************************************************************
 _Ret:
@@ -499,7 +607,7 @@ _DrawLine	proc	_hDC,_dwDegree,_dwRadiusAdjust
 _DrawLine	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _DrawCustomizedBackground	proc _hDC
-		local @dcBack, @hDcBack ; 'Back' for 'background'. 
+		local @hBmpBack, @hDcBack ; 'Back' for 'background'. 
 		;todo demo How to index an array.
 		;mov		eax,	1
 		;mov		ecx,	type NetworkMsg
@@ -510,29 +618,14 @@ _DrawCustomizedBackground	proc _hDC
 		.if	_status == 0
 			invoke	SelectObject, @hDcBack, _bg1; 将图片绑定到DC，这样，图片才能被操作
 		.elseif _status ==1
-			invoke	SelectObject, @hDcBack, _bg2
-		.elseif _status == 2
-			invoke	SelectObject, @hDcBack, _bg3
-			;invoke	CreateCompatibleDC,@hDcBack
-			;mov		@dcBack, eax
-			;invoke	SelectObject, @dcBack, _bg3
-			;invoke	BitBlt,@hDcBack,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @dcBack,0,0,SRCCOPY
-			invoke TextOutA, @hDcBack, 500, 380, addr _ipStr, _ipLen
-		.elseif _status == 3
-			invoke	SelectObject, @hDcBack, _bg4
-		.elseif _status == 4
-			invoke	SelectObject, @hDcBack, _bg5
-		.elseif _status == 5
-			invoke	SelectObject, @hDcBack, _bgready
-		.elseif _status == 6
-			invoke	SelectObject, @hDcBack, _bgwait
+			invoke	SelectObject, @hDcBack, bgTest; 将图片绑定到DC，这样，图片才能被操作
 		.endif
 		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @hDcBack,0,0,SRCCOPY ; 通过DC读取图片，复制到hDC，从而完成显示
 
 		invoke	DeleteDC, @hDcBack ;回收资源（DC）
 		; For your ref:我应该使用DeleteDC还是ReleaseDC?
 		; https://www.cnblogs.com/vranger/p/3564606.html
-		invoke	DeleteDC, @dcBack
+		invoke	DeleteObject, @hBmpBack
 		; Todo: 没有自动补全怎么破...
 		ret
 _DrawCustomizedBackground	endp
@@ -541,32 +634,58 @@ _DrawCustomizedBackground	endp
 
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; todo: modify senddata properly
 ; 发送缓冲区中的数据，上次的数据有可能未发送完，故每次发送前，
 ; 先将发送缓冲区合并
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_SendData	proc
+_SendData	proc @socket
 		local	@remainBfSize, @pendingMsg:NetworkMsg
+		local	@playerMsg, @socketaddr, @cnt
+
 		pushad
+		;计算写结构体的位置
+		mov esi, offset _sockets
+		mov edi, offset _playerMsgs
+		mov	@cnt, 0
+		.while @cnt < MAX_PLAYERS
+			mov eax, @socket
+			.if (eax == [esi])
+				mov @playerMsg, edi
+				mov @socketaddr, esi
+				.break
+			.endif
+			add esi, 4
+			add edi, type Client
+			inc @cnt
+		.endw
+		;没有找到指定结构体
+		.if @cnt == MAX_PLAYERS
+			ret
+		.endif
 ;********************************************************************
 ; 检测发送队列中是否还有数据，如果有，
 ; 就尝试将要发送的内容加到缓冲区的尾部
 ;********************************************************************
 		.while TRUE
 			; 计算缓冲区余下部分的长度
+			mov ebx, @playerMsg
 			mov eax, NETWORK_BUFFER_LENGTH
-			sub eax, writeBfCnt
+			sub eax, (Client ptr [ebx]).writeBfCnt
 			mov @remainBfSize, eax
 			;从队列中循环抽取结构体
 			;直到队空或者缓冲区满
-			.while outputQueue.len != 0
-				invoke _QueuePop, offset outputQueue, addr @pendingMsg
+			.while dword ptr (Client ptr [ebx]).outputQueue.len != 0
+				push ebx
+				invoke _QueuePop, addr (Client ptr [ebx]).outputQueue, addr @pendingMsg
+				pop ebx
 				mov eax, @pendingMsg.msglen
 				add	eax, 4
 				.break .if eax > @remainBfSize ;缓冲区满
-				mov esi, offset writeBuffer
-				add esi, writeBfCnt
+				lea edx, (Client ptr [ebx]).writeBuffer
+				mov esi, edx
+				add esi, (Client ptr [ebx]).writeBfCnt
 				sub @remainBfSize, eax
-				add writeBfCnt, eax
+				add (Client ptr [ebx]).writeBfCnt, eax
 				;拷贝前4个数值到writeBuffer中
 				dec	eax
 				mov [esi], al
@@ -582,22 +701,25 @@ _SendData	proc
 					invoke _CopyMemory, esi, addr @pendingMsg.msg, @pendingMsg.msglen
 				.endif
 			.endw
-			.break .if writeBfCnt == 0;如果已没有需要发送的数据，退出循环
+			mov ebx, @playerMsg
+			.break .if dword ptr (Client ptr [ebx]).writeBfCnt == 0;如果已没有需要发送的数据，退出循环
 			@@:
-				mov	esi,offset writeBuffer
-				mov	ebx,writeBfCnt
+				lea edx, (Client ptr [ebx]).writeBuffer
+				mov	esi, edx
+				mov	ebx,(Client ptr [ebx]).writeBfCnt
 				or	ebx,ebx
 				jz	_Ret
 				;The line below is necessary for program:
-				invoke	send,hSocket,esi,ebx,0
+				;invoke	send,@socket,esi,ebx,0
 
 				;for debug/todo:
 				;模拟5个字节成功发送的事件
-				;.if writeBfCnt > 5
-				;	mov eax, 5
-				;.else
-				;	mov eax, writeBfCnt
-				;.endif
+				mov ecx, @playerMsg
+				.if dword ptr (Client ptr [ecx]).writeBfCnt > 5
+					mov eax, 5
+				.else
+					mov eax, (Client ptr [ecx]).writeBfCnt
+				.endif
 
 				;异常处理
 				.if	eax ==	SOCKET_ERROR
@@ -605,7 +727,7 @@ _SendData	proc
 					.if	eax !=	WSAEWOULDBLOCK
 						;如果发送时遇到除了缓冲区满之外的错误
 						;直接断开连接
-						invoke	_Disconnect
+						invoke	_OnSocketClose, @socket
 					.endif
 					jmp	_Ret
 				.endif
@@ -613,9 +735,11 @@ _SendData	proc
 					;写0或负数字节
 					jmp	_Ret
 				.endif
-				sub	writeBfCnt,eax
-				mov	ecx,writeBfCnt
-				mov	edi,offset writeBuffer
+				mov ebx, @playerMsg
+				sub	(Client ptr [ebx]).writeBfCnt,eax
+				mov	ecx,(Client ptr [ebx]).writeBfCnt
+				lea edx, (Client ptr [ebx]).writeBuffer
+				mov	edi, edx
 				lea	esi,[edi+eax]
 				.if	ecx && (edi != esi)
 					cld
@@ -661,11 +785,7 @@ _UpdateKeyState	proc  _wParam, _keyDown
 			mov		keys.escape,eax
 		.elseif	_wParam	== VK_RETURN
 			mov		keys.return,eax
-		.elseif	_wParam	== VK_BACK
-			mov		keys.back,	eax
-		.elseif _wParam == 30h ;30h for number 0.
-			mov		keys.n0,	eax
-		.elseif _wParam == 31h
+		.elseif _wParam == 31h ;31h for number 1.
 			mov		keys.n1,	eax
 		.elseif _wParam == 32h
 			mov		keys.n2,	eax
@@ -677,54 +797,23 @@ _UpdateKeyState	proc  _wParam, _keyDown
 			mov		keys.n5,	eax
 		.elseif _wParam == 36h
 			mov		keys.n6,	eax
-		.elseif _wParam == 37h
-			mov		keys.n7,	eax
-		.elseif _wParam == 38h
-			mov		keys.n8,	eax
-		.elseif _wParam == 39h
-			mov		keys.n9,	eax
-		.elseif _wParam == VK_OEM_PERIOD
-			mov		keys.point,	eax
 		.endif
 		ret
 _UpdateKeyState	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_InitGame	proc  _hWnd
+_InitServer	proc  _hWnd
 		local	@stWsa:WSADATA
 		;初始化网络
 		invoke	WSAStartup, 101h, addr @stWsa
+		invoke  _StartListen
 
 		;设置定时器
 		invoke	SetTimer,_hWnd,ID_TIMER,TIMER_MAIN_INTERVAL,NULL
-		
-		;加载资源
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_TEST; 加载图片到bgTest
-		mov		bgTest, eax		;以后，每当要使用资源，就调用bgTest
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG1
-		mov		_bg1, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG2
-		mov		_bg2, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG3
-		mov		_bg3, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG4
-		mov		_bg4, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_BG5
-		mov		_bg5, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_BGWAIT
-		mov		_bgwait, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_BGREADY
-		mov		_bgready, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_STOP
-		mov		_stop, eax		
-		invoke	LoadBitmap, hInstance, IDB_BITMAP_SQUARE
-		mov		_square, eax		
-		;TODO 如果你们愿意的话，可以考虑把所有背景相关的变量搞个结构体
-		;但其实意义不大，因为我的VS没有自动补全
 
 		ret
-_InitGame	endp
+_InitServer	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -746,46 +835,46 @@ _OnPaint	proc	_hWnd,_hDC
 ;********************************************************************
 ; Customized 画一个自定义背景
 ;********************************************************************
-		invoke _DrawCustomizedBackground, @bufferDC
+		;invoke _DrawCustomizedBackground, @bufferDC
 ;********************************************************************
 ; 画时钟圆周上的点
 ;********************************************************************
-		;invoke	GetStockObject,WHITE_BRUSH
-		;invoke	SelectObject,@bufferDC,eax
-		;invoke	_DrawDot,@bufferDC,360/12,3	;画12个大圆点
-		;invoke	_DrawDot,@bufferDC,360/60,1	;画60个小圆点
+		invoke	GetStockObject,WHITE_BRUSH
+		invoke	SelectObject,@bufferDC,eax
+		invoke	_DrawDot,@bufferDC,360/12,3	;画12个大圆点
+		invoke	_DrawDot,@bufferDC,360/60,1	;画60个小圆点
 ;********************************************************************
 ; 画时钟指针
 ;********************************************************************
-		;invoke	CreatePen,PS_SOLID,1,0FFFFFFh
-		;invoke	SelectObject,@bufferDC,eax
-		;invoke	DeleteObject,eax
-		;movzx	eax,@stTime.wSecond
-		;mov	ecx,360/60
-		;mul	ecx			;秒针度数 = 秒 * 360/60
-		;invoke	_DrawLine,@bufferDC,eax,15
+		invoke	CreatePen,PS_SOLID,1,0FFFFFFh
+		invoke	SelectObject,@bufferDC,eax
+		invoke	DeleteObject,eax
+		movzx	eax,@stTime.wSecond
+		mov	ecx,360/60
+		mul	ecx			;秒针度数 = 秒 * 360/60
+		invoke	_DrawLine,@bufferDC,eax,15
 ;********************************************************************
-		;invoke	CreatePen,PS_SOLID,2,0FFFFFFh
-		;invoke	SelectObject,@bufferDC,eax
-		;invoke	DeleteObject,eax
-		;movzx	eax,@stTime.wMinute
-		;mov	ecx,360/60
-		;mul	ecx			;分针度数 = 分 * 360/60
-		;invoke	_DrawLine,@bufferDC,eax,20
+		invoke	CreatePen,PS_SOLID,2,0FFFFFFh
+		invoke	SelectObject,@bufferDC,eax
+		invoke	DeleteObject,eax
+		movzx	eax,@stTime.wMinute
+		mov	ecx,360/60
+		mul	ecx			;分针度数 = 分 * 360/60
+		invoke	_DrawLine,@bufferDC,eax,20
 ;********************************************************************
-		;invoke	CreatePen,PS_SOLID,3,0FFFFFFh
-		;invoke	SelectObject,@bufferDC,eax
-		;invoke	DeleteObject,eax
-		;movzx	eax,@stTime.wHour
-		;.if	eax >=	12
-		;	sub	eax,12
-		;.endif
-		;mov	ecx,360/12
-		;mul	ecx
-		;movzx	ecx,@stTime.wMinute
-		;shr	ecx,1
-		;add	eax,ecx
-		;invoke	_DrawLine,@bufferDC,eax,30
+		invoke	CreatePen,PS_SOLID,3,0FFFFFFh
+		invoke	SelectObject,@bufferDC,eax
+		invoke	DeleteObject,eax
+		movzx	eax,@stTime.wHour
+		.if	eax >=	12
+			sub	eax,12
+		.endif
+		mov	ecx,360/12
+		mul	ecx
+		movzx	ecx,@stTime.wMinute
+		shr	ecx,1
+		add	eax,ecx
+		invoke	_DrawLine,@bufferDC,eax,30
 ;********************************************************************
 ;		把缓存绘制到hDC上
 ;********************************************************************
@@ -801,181 +890,53 @@ _OnPaint	proc	_hWnd,_hDC
 _OnPaint	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_ComeputeGameLogic	proc  _hWnd
+_ProcessClientMsg	proc  _hWnd
 		local @testNetworkMsg:NetworkMsg
-		;TODO 在这里写游戏的逻辑
+		;TODO 在这里写服务器的逻辑
 
 		;下面是(离线)测试网络相关API的函数
 		;一旦测试全部通过，这些代码就会被移除
 		;它们也可以用来测试按键的行为：
 		;当debug时，按键松开事件不能收到，因此需要手动重置按键状态
-		;.if keys.right;按右，就接收3条Input消息到缓冲中
-		;	mov edi, offset readBuffer
-		;	add edi, readBfCnt
-		;	mov eax, testStrlen
-		;	add	readBfCnt, eax
-		;	invoke _CopyMemory, edi, offset testString, testStrlen
-		;	mov keys.right, 0
-		;.elseif keys.left;keys.left;按左，把inputBuffer解析到结构体中
-		;	invoke _RecvData;, offset readBuffer, readBfCnt
-		;	mov keys.left, 0
-		;	mov	eax, eax
-		;	mov keys.left, 0
-		;.elseif keys.up;按上，模拟取走一条Input消息
-		;按上建立连接
-		;	mov keys.up, 0
-		;	invoke _Connect
-		;	mov	eax, eax
-		;.elseif keys.space;按空格，生成两个总长度为7的Output消息，并在网络上发送
-		;	invoke _QueuePop, offset inputQueue, addr @testNetworkMsg
-		;	mov	@testNetworkMsg.inst, 233
-		;	mov	@testNetworkMsg.sender, 15
-		;	mov	@testNetworkMsg.recver, 25
-		;	mov @testNetworkMsg.msglen, 3
-		;	invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
-		;	invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
-		;	invoke _SendData
-		;	mov	eax, eax
-		;	mov keys.space, 0
-		;.elseif keys.return
-		;	invoke _SendData
-		;	mov	eax, eax
-		;	mov keys.return, 0
-		;.endif
-
-		.if keys.right;按右键
-			.if _status == 0
-				mov _status, 1
-			.endif
+		.if keys.right;按右，就接收3条Input消息到缓冲中
+			mov edi, offset _playerMsgs[type Client].readBuffer
+			add edi, _playerMsgs[type Client].readBfCnt
+			mov eax, testStrlen
+			add	_playerMsgs[type Client].readBfCnt, eax
+			invoke _CopyMemory, edi, offset testString, testStrlen
 			mov keys.right, 0
-		.elseif keys.left;按左键
-			.if _status == 1
-				mov _status, 0
-			.endif
+		.elseif keys.left;按左，把inputBuffer解析到结构体中
+			mov dword ptr _sockets, 233 
+			invoke _RecvData, 0;, offset readBuffer, readBfCnt
 			mov keys.left, 0
-		.elseif keys.return;按回车
-			.if _status == 0
-				mov _status, 3
-			.elseif _status == 1
-				mov _status, 2
-			.elseif _status == 2
-				invoke	RtlZeroMemory,addr serverIpAddr,sizeof serverIpAddr
-				invoke _CopyMemory,addr serverIpAddr,addr _ipStr,_ipLen
-				invoke _Connect
-				mov _status, 5
-			.elseif _status == 5
-				mov _status, 6
-			.endif
+			mov	eax, eax
+		.elseif keys.up;按上，模拟取走一条Input消息
+		;按上建立连接
+			mov keys.up, 0
+			;invoke _Connect
+			mov	eax, eax
+		.elseif keys.space;按空格，生成两个总长度为7的Output消息，并在网络上发送
+			invoke _QueuePop, offset inputQueue, addr @testNetworkMsg
+			mov	@testNetworkMsg.inst, 233
+			mov	@testNetworkMsg.sender, 15
+			mov	@testNetworkMsg.recver, 25
+			mov @testNetworkMsg.msglen, 3
+			invoke _QueuePush, offset _playerMsgs[type Client].outputQueue, addr @testNetworkMsg
+			invoke _QueuePush, offset _playerMsgs[type Client].outputQueue, addr @testNetworkMsg
+			invoke _QueuePush, offset _playerMsgs.outputQueue, addr @testNetworkMsg
+			invoke _QueuePush, offset _playerMsgs.outputQueue, addr @testNetworkMsg
+			mov dword ptr _sockets, 233 
+			invoke _SendData, 0
+			invoke _SendData, 233
+			mov	eax, eax
+			mov keys.space, 0
+		.elseif keys.return;按回车，模拟在网络上发送一次数据
+			;invoke _SendData
+			mov	eax, eax
 			mov keys.return, 0
-		.elseif keys.back;按退格
-			.if _status == 2
-				.if _ipLen > 0
-					dec eax
-				.endif
-			.endif
-			mov keys.back, 0
-		.elseif keys.n0
-			.if _status == 2
-				.if _ipLen < 15
-					mov eax, _ipLen
-					mov _ipStr[eax], '0'
-					inc _ipLen
-				.endif
-			.endif
-			mov keys.n0, 0
-		.elseif keys.n1
-			.if _status == 2
-				.if _ipLen < 15
-					mov eax, _ipLen
-					mov _ipStr[eax], '1'
-					inc _ipLen
-				.endif
-			.endif
-			mov keys.n1, 0
-		.elseif keys.n2
-			.if _status == 2
-				.if _ipLen < 15
-					mov eax, _ipLen
-					mov _ipStr[eax], '2'
-					inc _ipLen
-				.endif
-			.endif
-			mov keys.n2, 0
-		.elseif keys.n3
-			.if _status == 2
-				.if _ipLen < 15
-					mov eax, _ipLen
-					mov _ipStr[eax], '3'
-					inc _ipLen
-				.endif
-			.endif
-			mov keys.n3, 0
-		.elseif keys.n4
-			.if _status == 2
-				.if _ipLen < 15
-					mov eax, _ipLen
-					mov _ipStr[eax], '4'
-					inc _ipLen
-				.endif
-			.endif
-			mov keys.n4, 0
-		.elseif keys.n5
-			.if _status == 2
-				.if _ipLen < 15
-					mov eax, _ipLen
-					mov _ipStr[eax], '5'
-					inc _ipLen
-				.endif
-			.endif
-			mov keys.n5, 0
-		.elseif keys.n6
-			.if _status == 2
-				.if _ipLen < 15
-					mov eax, _ipLen
-					mov _ipStr[eax], '6'
-					inc _ipLen
-				.endif
-			.endif
-			mov keys.n6, 0
-		.elseif keys.n7
-			.if _status == 2
-				.if _ipLen < 15
-					mov eax, _ipLen
-					mov _ipStr[eax], '7'
-					inc _ipLen
-				.endif
-			.endif
-			mov keys.n7, 0
-		.elseif keys.n8
-			.if _status == 2
-				.if _ipLen < 15
-					mov eax, _ipLen
-					mov _ipStr[eax], '8'
-					inc _ipLen
-				.endif
-			.endif
-			mov keys.n8, 0
-		.elseif keys.n9
-			.if _status == 2
-				.if _ipLen < 15
-					mov eax, _ipLen
-					mov _ipStr[eax], '9'
-					inc _ipLen
-				.endif
-			.endif
-			mov keys.n9, 0
-		.elseif keys.point
-			.if _status == 2
-				.if _ipLen < 15
-					mov eax, _ipLen
-					mov _ipStr[eax], '.'
-					inc _ipLen
-				.endif
-			.endif
-			mov keys.point, 0
 		.endif 
 		ret
-_ComeputeGameLogic	endp
+_ProcessClientMsg	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -984,7 +945,7 @@ _ProcessTimer	proc  _hWnd, timerId
 		;如，当前的定时器可能是UpdateFrame计时器，
 		;此时我们就计算当前的状态，并修改对应的状态。
 		.if timerId == ID_TIMER
-			invoke	_ComeputeGameLogic, _hWnd
+			invoke	_ProcessClientMsg, _hWnd
 			invoke	InvalidateRect,_hWnd,NULL,FALSE
 		.else
 			;TODO 在此处添加其它的计时器
@@ -1006,14 +967,13 @@ _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam
 ;********************************************************************
 			mov	eax,lParam
 			.if	ax ==	FD_READ
-				invoke	_RecvData
+				invoke	_RecvData, wParam
 			.elseif	ax ==	FD_WRITE
-				invoke	_SendData	;继续发送缓冲区数据
-			.elseif	ax ==	FD_CONNECT
-				;TODO 添加合适的通知
-				ret
+				invoke	_SendData, wParam	;继续发送缓冲区数据
 			.elseif	ax ==	FD_CLOSE
-				call	_Disconnect
+				invoke	_OnSocketClose, wParam
+			.elseif ax ==	FD_ACCEPT
+				invoke  _OnSocketAccept
 			.endif
 ;********************************************************************
 		.elseif	eax ==	WM_TIMER
@@ -1030,7 +990,7 @@ _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam
 			invoke	EndPaint,hWnd,addr @stPS
 ;********************************************************************
 		.elseif	eax ==	WM_CREATE
-			invoke	_InitGame, hWnd
+			invoke	_InitServer, hWnd
 		.elseif	eax ==	WM_CLOSE
 			invoke  _Disconnect
 			invoke	WSACleanup

@@ -7,7 +7,8 @@
 TCP_PORT				equ		10086;Server will need to listen on 10086.
 NETWORK_BUFFER_LENGTH	equ		8192
 ;todo change 4 to 128. 4 is used for debugging.
-NETWORK_MSGBUF_LENGTH	equ		128;任意时刻，最多可有128条未读消息和未发消息。
+NETWORK_MSGBUF_LENGTH	equ		256;任意时刻，最多可有256条未读消息和未发消息。
+MAX_PLAYERS				equ		4;最大的可支持的玩家数量
 WM_SOCKET				equ		WM_USER + 100
 	.data
 NetworkMsg  struct;收发队列均用该结构体
@@ -23,13 +24,8 @@ NetworkMsg	ends
 ;  逻辑层不要操作这里的任何内容
 ;  总是调用提供的接口收、发数据
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-serverIpAddr	db		    '127.0.0.1', 0, 10 DUP(0) 	;use localhost to test network
+serverIpAddr	db		    '0.0.0.0', 0	;use localhost to test network
 hSocket			dd			?
-readBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)
-writeBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)
-readBfCnt		dword		0
-writeBfCnt		dword		0
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;  逻辑层网络接口
@@ -46,14 +42,19 @@ MsgQueue	struct;收发队列均用该结构体
 	head	dword			0;队列头
 MsgQueue	ends
 
-inputQueue	MsgQueue	<>
-outputQueue	MsgQueue	<>
-;TODO 写个操作消息队列的函数.
+
+Client			struct
+	readBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)
+	writeBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)
+	outputQueue		MsgQueue    <>; 输出队列被移动到了这里
+	readBfCnt		dword		0
+	writeBfCnt		dword		0
+Client			ends
+inputQueue		MsgQueue	<>
+_playerMsgs		Client		MAX_PLAYERS dup(<>)
+_sockets		dword		0 dup(MAX_PLAYERS)
 
 		.const
-szErrIP		db	'无效的服务器IP地址!',0
-szErrConnect	db	'无法连接到服务器!',0
-szErrLogin	db	'无法登录到服务器，请检查用户名密码!',0
 szSpar		db	' : ',0
 typeNetworkMsg dword type NetworkMsg
 testString  db  5, 'abcde', 3, 20, 30, 40, 4, '1234' 
