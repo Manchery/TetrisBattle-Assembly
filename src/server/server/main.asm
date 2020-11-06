@@ -146,7 +146,7 @@ _Disconnect	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 连接到服务器
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_StartListen proc	;_lParam;We dont need this params, for now.
+_StartListen proc _hWnd	;_lParam;We dont need this params, for now.
 		local	@stSin:sockaddr_in, @on:dword
 
 ;********************************************************************
@@ -162,7 +162,7 @@ _StartListen proc	;_lParam;We dont need this params, for now.
 		mov	@stSin.sin_addr,INADDR_ANY
 		invoke	bind,hListenSocket,addr @stSin,sizeof @stSin
 		.if	eax
-			invoke	MessageBox,hWinMain,addr szErrBind,\;todo add a szErrBind str.
+			invoke	MessageBox,_hWnd,addr szErrBind,\;todo add a szErrBind str.
 				NULL,MB_OK or MB_ICONSTOP
 			invoke	ExitProcess,NULL
 			ret
@@ -170,7 +170,7 @@ _StartListen proc	;_lParam;We dont need this params, for now.
 		mov	@on, 1
 		invoke	setsockopt, hListenSocket, SOL_SOCKET, SO_REUSEADDR, addr @on, type @on
 		.if	eax
-			invoke	MessageBox,hWinMain,addr szErrBind,\;todo add a szErrBind str.
+			invoke	MessageBox,_hWnd,addr szErrBind,\;todo add a szErrBind str.
 				NULL,MB_OK or MB_ICONSTOP
 			invoke	ExitProcess,NULL
 			ret
@@ -181,8 +181,8 @@ _StartListen proc	;_lParam;We dont need this params, for now.
 		;设置监听套接字的最大队列数量及将其加入到消息循环中
 		;绑定到WSASyncSelect之后用事件响应连入操作。
 		;FD_CLOSE大概要判断下是不是监听套接字。如果是监听套接字就退出程序(或重连)吧。
+		invoke	WSAAsyncSelect,hListenSocket,_hWnd,WM_SOCKET,FD_ACCEPT or FD_CLOSE
 		invoke	listen,hListenSocket,100
-		invoke	WSAAsyncSelect,hListenSocket,hWinMain,WM_SOCKET,FD_ACCEPT or FD_CLOSE
 		;下面的代码不在此处处理。
 		;所以除了最后退出程序之外，貌似没有必要提前关闭hListenSocket
 		;TODO:这句要注释
@@ -194,7 +194,7 @@ _StartListen	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 响应连接到服务器的事件：一次一条
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_OnSocketAccept proc
+_OnSocketAccept proc _hWnd
 		;响应接入的连接
 		.if (_onPlaying == 0) && (_players < MAX_PLAYERS) 
 			invoke	accept,hListenSocket,NULL,0
@@ -205,7 +205,7 @@ _OnSocketAccept proc
 			mov ebx, _players
 			lea edi, [edi + 4 * ebx]
 			mov [edi], eax
-			invoke	WSAAsyncSelect,eax,hWinMain,WM_SOCKET,FD_READ or FD_WRITE or FD_CLOSE
+			invoke	WSAAsyncSelect,eax,_hWnd,WM_SOCKET,FD_READ or FD_WRITE or FD_CLOSE
 			inc _players
 		.endif
 		;并不是，我们只有通过关闭套接字的方式才能阻止新传入的连接...
@@ -404,7 +404,7 @@ _RecvData	proc @socket
 		lea edx, (Client ptr [ebx]).readBuffer
 		mov	esi, edx
 		lea edx, (Client ptr [ebx]).readBfCnt
-		mov	ecx, edx
+		mov	ecx, [edx]
 		add	esi,ecx
 ;********************************************************************
 		;将eax指向剩余可用的全部缓冲区大小
@@ -412,7 +412,7 @@ _RecvData	proc @socket
 		mov	eax, NETWORK_BUFFER_LENGTH
 		sub	eax, ecx
 		;added for debug/test
-		jmp _Recved;added for debug/test
+		;jmp _Recved;added for debug/test
 		.if	eax ;这个判断实际上是不必要的，
 				;因为一次读取+处理后总不可能剩余超过255B，
 				;而缓冲区有8192B.
@@ -710,16 +710,16 @@ _SendData	proc @socket
 				or	ebx,ebx
 				jz	_Ret
 				;The line below is necessary for program:
-				;invoke	send,@socket,esi,ebx,0
+				invoke	send,@socket,esi,ebx,0
 
 				;for debug/todo:
 				;模拟5个字节成功发送的事件
-				mov ecx, @playerMsg
-				.if dword ptr (Client ptr [ecx]).writeBfCnt > 5
-					mov eax, 5
-				.else
-					mov eax, (Client ptr [ecx]).writeBfCnt
-				.endif
+				;mov ecx, @playerMsg
+				;.if dword ptr (Client ptr [ecx]).writeBfCnt > 5
+				;	mov eax, 5
+				;.else
+				;	mov eax, (Client ptr [ecx]).writeBfCnt
+				;.endif
 
 				;异常处理
 				.if	eax ==	SOCKET_ERROR
@@ -807,7 +807,7 @@ _InitServer	proc  _hWnd
 		local	@stWsa:WSADATA
 		;初始化网络
 		invoke	WSAStartup, 101h, addr @stWsa
-		invoke  _StartListen
+		invoke  _StartListen, _hWnd
 
 		;设置定时器
 		invoke	SetTimer,_hWnd,ID_TIMER,TIMER_MAIN_INTERVAL,NULL
@@ -973,7 +973,7 @@ _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam
 			.elseif	ax ==	FD_CLOSE
 				invoke	_OnSocketClose, wParam
 			.elseif ax ==	FD_ACCEPT
-				invoke  _OnSocketAccept
+				invoke  _OnSocketAccept, hWnd
 			.endif
 ;********************************************************************
 		.elseif	eax ==	WM_TIMER
