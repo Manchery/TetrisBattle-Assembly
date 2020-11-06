@@ -65,5 +65,14 @@
     <None Include="network.inc">
       <Filter>源文件</Filter>
     </None>
+    <None Include="tetris2.inc">
+      <Filter>头文件</Filter>
+    </None>
+    <None Include="draw.inc">
+      <Filter>头文件</Filter>
+    </None>
+    <None Include="utils.inc">
+      <Filter>头文件</Filter>
+    </None>
   </ItemGroup>
 </Project>

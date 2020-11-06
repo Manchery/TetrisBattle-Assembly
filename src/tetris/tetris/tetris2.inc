@@ -1,9 +1,15 @@
+include		draw.inc
+include		utils.inc
+
 .data
 
 ; 绘制地图坐标、大小信息
 _blockSideLength EQU 40
-_mapOffsetX EQU 20
-_mapOffsetY EQU 20
+_mapOffsetX EQU 100
+_mapOffsetY EQU 82
+
+_nextOffsetX EQU 480
+_nextOffsetY EQU 130
 
 ; 地图大小 20 * 10
 _mapHeight EQU 20
@@ -12,14 +18,18 @@ _map dword 200 dup(0)	; 存储颜色，0 表示空
 
 ; 当前方块、颜色、旋转状态、位置
 _currentBlock dword -1
-_currentColor dword 1
+_currentColor dword 0
 _currentStatus dword 0
-_currentPosI dword -2
-_currentPosJ dword 3
+_currentPosI dword 0
+_currentPosJ dword 0
 
+; TODO: init block random
 ; 下一个方块、颜色
-_nextBlock dword 1
-_nextColor dword 1
+_nextBlock dword 0
+_nextColor dword 0
+_nextPosI dword 0
+_nextPosJ dword 0
+_nextStatus dword 0
 
 .const 
 
@@ -85,39 +95,45 @@ _GetMap proc _i,_j
 _GetMap endp
 
 ; 绘制 map[i][j]
-_DrawSquare proc _hDC, _i, _j, _color
-	
+_DrawSquare proc _hDC, _i, _j, _color, _offsetX, _offsetY
+	local @hDcSquare
+
 	; 注意负数的判断，>=0 的判断是无意义的，但是由于下溢，负数不满足 <= 那个条件
 	.if (_i>=0) && (_i<_mapHeight) && (_j>=0) && (_j<_mapWidth)	
 		pushad
 
-		; TODO 选择颜色
-		.if _color==0
-			invoke	GetStockObject,BLACK_BRUSH
-		.else
-			invoke	GetStockObject,WHITE_BRUSH
-		.endif
-
-		invoke	SelectObject,_hDC, eax
-		invoke	DeleteObject, eax
+		invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
+		mov		@hDcSquare, eax
+		invoke	SelectObject, @hDcSquare, _square
 
 		;准备 left, top, right, bottom
 		mov eax, _i
 		mov ecx, _blockSideLength
 		mul ecx
 		mov ebx, eax
-		add ebx, _mapOffsetY
+		add ebx, _offsetY
 		mov eax, _j
 		mul ecx
-		add eax, _mapOffsetY
-		mov ecx, eax
-		add ecx, _blockSideLength
-		mov edx, ebx
-		add edx, _blockSideLength
+		add eax, _offsetX
 
 		; TODO: 绘制位图
-		invoke	Rectangle, _hDC, eax, ebx, ecx, edx
+		;invoke	Rectangle, _hDC, eax, ebx, ecx, edx
 
+		dec _color
+		; TODO 选择颜色
+		.if _color!=-1
+			push eax
+			
+			mov ecx, 60 
+			mov eax, _color
+			mul ecx
+			mov ecx, eax
+
+			pop eax
+			invoke	BitBlt,_hDC, eax, ebx, _blockSideLength, _blockSideLength, @hDcSquare, ecx, 0, SRCCOPY
+		.endif
+
+		invoke	DeleteDC, @hDcSquare
 		popad
 	.endif
 	ret
@@ -370,3 +386,28 @@ _ReduceLines proc
 	popad
 	ret
 _ReduceLines endp
+
+
+_GetNextBlock proc
+	push eax
+	push ebx
+
+	invoke _GetRandomIndex, 7
+	mov _nextBlock, eax
+	invoke _GetRandomIndex, 8
+	mov _nextColor, eax
+	inc _nextColor
+
+	mov ebx, _nextBlock
+	mov eax, _blockInitPos[ebx * 8]
+	mov _nextPosI, eax
+	mov eax, _blockInitPos[ebx * 8 + 4]
+	mov _nextPosJ, eax
+
+	mov _nextStatus, 0
+
+	pop ebx
+	pop eax
+
+	ret
+_GetNextBlock endp

@@ -25,6 +25,8 @@ include		Gdi32.inc
 includelib	Gdi32.lib
 include		wsock32.inc
 includelib	wsock32.lib
+
+include		tetris2.inc
 include		network.inc
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; Equ 等值定义
@@ -47,6 +49,14 @@ IDB_BITMAP_BGWAIT       equ     128
 IDB_BITMAP_STOP         equ     129
 IDB_BITMAP_SQUARE       equ     130
 IDB_BITMAP_BGREADY      equ     131
+
+HOME_SINGLE_PAGE		equ		0
+HOME_MULTIPLE_PAGE		equ		1
+MULTIPLE_CONNECT_PAGE	equ		2
+SINGLE_GAME_PAGE		equ		3
+MULTIPLE_GAME_PAGE		equ		4
+MULTIPLE_READY_PAGE		equ		5
+MULTIPLE_WAIT_PAGE		equ		6
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 数据段
@@ -78,7 +88,7 @@ KeyState	ends
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 keys		KeyState	<>
-_status		dword	0
+_page		dword	0
 _ipLen		dword	0
 _ipStr		db		?
 hInstance	dd		?
@@ -86,21 +96,6 @@ hWinMain	dd		?
 dwCenterX	dd		?	;圆心X
 dwCenterY	dd		?	;圆心Y
 dwRadius	dd		?	;半径
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;	图片资源
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-bgTest		dword	0
-_bg1		dword	0
-_bg2		dword	0	
-_bg3		dword	0	
-_bg4		dword	0
-_bg5		dword	0	
-_bgwait		dword	0
-_bgready	dword	0
-_stop		dword	0
-_square		dword	0
-
 
 		.const
 szClassName	db	'Tetris: the game',0
@@ -507,24 +502,24 @@ _DrawCustomizedBackground	proc _hDC
 		;mov		inputQueue.msgs[eax].sender, 233
 		invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
 		mov		@hDcBack, eax
-		.if	_status == 0
+		.if	_page == 0
 			invoke	SelectObject, @hDcBack, _bg1; 将图片绑定到DC，这样，图片才能被操作
-		.elseif _status ==1
+		.elseif _page ==1
 			invoke	SelectObject, @hDcBack, _bg2
-		.elseif _status == 2
+		.elseif _page == 2
 			invoke	SelectObject, @hDcBack, _bg3
 			;invoke	CreateCompatibleDC,@hDcBack
 			;mov		@dcBack, eax
 			;invoke	SelectObject, @dcBack, _bg3
 			;invoke	BitBlt,@hDcBack,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @dcBack,0,0,SRCCOPY
 			invoke TextOutA, @hDcBack, 500, 380, addr _ipStr, _ipLen
-		.elseif _status == 3
+		.elseif _page == 3
 			invoke	SelectObject, @hDcBack, _bg4
-		.elseif _status == 4
+		.elseif _page == 4
 			invoke	SelectObject, @hDcBack, _bg5
-		.elseif _status == 5
+		.elseif _page == 5
 			invoke	SelectObject, @hDcBack, _bgready
-		.elseif _status == 6
+		.elseif _page == 6
 			invoke	SelectObject, @hDcBack, _bgwait
 		.endif
 		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @hDcBack,0,0,SRCCOPY ; 通过DC读取图片，复制到hDC，从而完成显示
@@ -731,6 +726,8 @@ _InitGame	endp
 _OnPaint	proc	_hWnd,_hDC
 		local	@stTime:SYSTEMTIME, @bufferDC; bufferDC is cache for pictures.
 		local	@bufferBmp
+		local	@i
+		local	@j
 
 		pushad
 		invoke	GetLocalTime,addr @stTime
@@ -747,6 +744,73 @@ _OnPaint	proc	_hWnd,_hDC
 ; Customized 画一个自定义背景
 ;********************************************************************
 		invoke _DrawCustomizedBackground, @bufferDC
+
+		.if _page == SINGLE_GAME_PAGE
+			;********************************************************************
+			; 画地图
+			;********************************************************************
+			
+			mov @i, 0
+
+			.while @i < _mapHeight
+				mov @j, 0
+				.while @j < _mapWidth
+					invoke _GetMap, @i, @j
+					invoke _DrawSquare, @bufferDC, @i, @j, eax, _mapOffsetX, _mapOffsetY
+					inc @j
+				.endw
+				inc @i
+			.endw
+
+			; 当前块
+			.if _currentBlock != -1
+				mov eax, _currentBlock
+				mov ecx, 4
+				mul ecx
+				add eax, _currentStatus
+				mov ecx, 8
+				mul ecx
+
+				mov @i, 0
+				.while @i < 4
+					mov ecx, _currentPosI
+					add ecx, _blockOffset[eax * 4]
+					add eax, 1
+					mov edx, _currentPosJ
+					add edx, _blockOffset[eax * 4]
+					add eax, 1
+
+					invoke _DrawSquare, @bufferDC, ecx, edx, _currentColor, _mapOffsetX, _mapOffsetY
+					inc @i
+				.endw
+			.endif
+
+			; 下一块
+			.if _nextBlock != -1
+				mov eax, _nextBlock
+				mov ecx, 4
+				mul ecx
+				add eax, _nextStatus
+				mov ecx, 8
+				mul ecx
+
+				mov @i, 0
+				.while @i < 4
+					mov ecx, _nextPosI
+					add ecx, _blockOffset[eax * 4]
+					add eax, 1
+					mov edx, _nextPosJ
+					add edx, _blockOffset[eax * 4]
+					add eax, 1
+
+					invoke _DrawSquare, @bufferDC, ecx, edx, _nextColor, _nextOffsetX, _nextOffsetY
+					inc @i
+				.endw
+			.endif
+
+
+		.endif
+
 ;********************************************************************
 ; 画时钟圆周上的点
 ;********************************************************************
@@ -802,7 +866,7 @@ _OnPaint	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ComeputeGameLogic	proc  _hWnd
-		local @testNetworkMsg:NetworkMsg
+		;local @testNetworkMsg:NetworkMsg
 		;TODO 在这里写游戏的逻辑
 
 		;下面是(离线)测试网络相关API的函数
@@ -843,137 +907,213 @@ _ComeputeGameLogic	proc  _hWnd
 		;	mov keys.return, 0
 		;.endif
 
-		.if keys.right;按右键
-			.if _status == 0
-				mov _status, 1
+		pushad 
+
+		;@@@@@@@@@@@@@@@@@@@@@ 主页:选中单人 @@@@@@@@@@@@@@@@@@@@@
+		.if _page == HOME_SINGLE_PAGE
+			.if keys.right
+				mov _page, 1
+				mov keys.right, HOME_MULTIPLE_PAGE
+			.elseif keys.return
+				mov _page, SINGLE_GAME_PAGE
+				mov keys.return, 0
 			.endif
-			mov keys.right, 0
-		.elseif keys.left;按左键
-			.if _status == 1
-				mov _status, 0
+		; @@@@@@@@@@@@@@@@@@@@ 主页:选中多人 @@@@@@@@@@@@@@@@@@@@@
+		.elseif _page == HOME_MULTIPLE_PAGE
+			.if keys.left
+				mov _page, HOME_SINGLE_PAGE
+				mov keys.left, 0
+			.elseif keys.return
+				mov _page, MULTIPLE_CONNECT_PAGE
+				mov keys.return, 0
 			.endif
-			mov keys.left, 0
-		.elseif keys.return;按回车
-			.if _status == 0
-				mov _status, 3
-			.elseif _status == 1
-				mov _status, 2
-			.elseif _status == 2
+		; @@@@@@@@@@@@@@@@@@@@ 多人:准备连接 @@@@@@@@@@@@@@@@@@@@@
+		.elseif _page == MULTIPLE_CONNECT_PAGE
+			.if keys.return
 				invoke	RtlZeroMemory,addr serverIpAddr,sizeof serverIpAddr
 				invoke _CopyMemory,addr serverIpAddr,addr _ipStr,_ipLen
 				invoke _Connect
-				mov _status, 5
-			.elseif _status == 5
-				mov _status, 6
-			.endif
-			mov keys.return, 0
-		.elseif keys.back;按退格
-			.if _status == 2
+				mov _page, MULTIPLE_READY_PAGE
+				mov keys.return, 0
+			.elseif keys.back
 				.if _ipLen > 0
-					dec eax
+					dec _ipLen
 				.endif
-			.endif
-			mov keys.back, 0
-		.elseif keys.n0
-			.if _status == 2
+				mov keys.back, 0
+			.elseif keys.n0
 				.if _ipLen < 15
 					mov eax, _ipLen
 					mov _ipStr[eax], '0'
 					inc _ipLen
 				.endif
-			.endif
-			mov keys.n0, 0
-		.elseif keys.n1
-			.if _status == 2
+				mov keys.n0, 0
+			.elseif keys.n1
 				.if _ipLen < 15
 					mov eax, _ipLen
 					mov _ipStr[eax], '1'
 					inc _ipLen
 				.endif
-			.endif
-			mov keys.n1, 0
-		.elseif keys.n2
-			.if _status == 2
+				mov keys.n1, 0
+			.elseif keys.n2
 				.if _ipLen < 15
 					mov eax, _ipLen
 					mov _ipStr[eax], '2'
 					inc _ipLen
 				.endif
-			.endif
-			mov keys.n2, 0
-		.elseif keys.n3
-			.if _status == 2
+				mov keys.n2, 0
+			.elseif keys.n3
 				.if _ipLen < 15
 					mov eax, _ipLen
 					mov _ipStr[eax], '3'
 					inc _ipLen
 				.endif
-			.endif
-			mov keys.n3, 0
-		.elseif keys.n4
-			.if _status == 2
+				mov keys.n3, 0
+			.elseif keys.n4
 				.if _ipLen < 15
 					mov eax, _ipLen
 					mov _ipStr[eax], '4'
 					inc _ipLen
 				.endif
-			.endif
-			mov keys.n4, 0
-		.elseif keys.n5
-			.if _status == 2
+				mov keys.n4, 0
+			.elseif keys.n5
 				.if _ipLen < 15
 					mov eax, _ipLen
 					mov _ipStr[eax], '5'
 					inc _ipLen
 				.endif
-			.endif
-			mov keys.n5, 0
-		.elseif keys.n6
-			.if _status == 2
+				mov keys.n5, 0
+			.elseif keys.n6
 				.if _ipLen < 15
 					mov eax, _ipLen
 					mov _ipStr[eax], '6'
 					inc _ipLen
 				.endif
-			.endif
-			mov keys.n6, 0
-		.elseif keys.n7
-			.if _status == 2
+				mov keys.n6, 0
+			.elseif keys.n7
 				.if _ipLen < 15
 					mov eax, _ipLen
 					mov _ipStr[eax], '7'
 					inc _ipLen
 				.endif
-			.endif
-			mov keys.n7, 0
-		.elseif keys.n8
-			.if _status == 2
+				mov keys.n7, 0
+			.elseif keys.n8
 				.if _ipLen < 15
 					mov eax, _ipLen
 					mov _ipStr[eax], '8'
 					inc _ipLen
 				.endif
-			.endif
-			mov keys.n8, 0
-		.elseif keys.n9
-			.if _status == 2
+				mov keys.n8, 0
+			.elseif keys.n9
 				.if _ipLen < 15
 					mov eax, _ipLen
 					mov _ipStr[eax], '9'
 					inc _ipLen
 				.endif
-			.endif
-			mov keys.n9, 0
-		.elseif keys.point
-			.if _status == 2
+				mov keys.n9, 0
+			.elseif keys.point
 				.if _ipLen < 15
 					mov eax, _ipLen
 					mov _ipStr[eax], '.'
 					inc _ipLen
 				.endif
+				mov keys.point, 0
+			.endif 
+		; @@@@@@@@@@@@@@@@@@@@ 单人: 游戏 @@@@@@@@@@@@@@@@@@@@@
+		.elseif _page == SINGLE_GAME_PAGE
+			inc _sinceLastMoveDown
+
+			;TODO: game start init
+
+			.if _currentBlock == -1
+				invoke _GetNextBlock
 			.endif
-			mov keys.point, 0
-		.endif 
+
+			;切换到下一个块
+			.if _readyNext==1
+				.if _currentBlock != -1
+					; 写入地图
+					invoke _WriteMap, _currentBlock, _currentStatus, _currentPosI, _currentPosJ, _currentColor
+					; 计算消行
+					invoke _ReduceLines
+				.endif
+
+				mov eax, _nextBlock
+				mov _currentBlock, eax
+				mov eax, _nextColor
+				mov _currentColor, eax
+				mov eax, _nextPosI
+				mov _currentPosI, eax
+				mov eax, _nextPosJ
+				mov _currentPosJ, eax
+				mov eax, _nextStatus
+				mov _currentStatus, eax
+
+				invoke _PositionValid, _currentBlock, _currentStatus, _currentPosI, _currentPosJ
+				.if eax==0
+					;TODO: gameover
+				.endif
+
+				invoke _GetNextBlock
+
+				mov _readyNext, 0
+			.endif
+
+			; 块自然下落
+			.if _readyNext==0
+				mov eax, _sinceLastMoveDown
+				.if eax >=_moveDownInternal
+					invoke _TryMove, 1, 0
+					mov _sinceLastMoveDown, 0
+					.if eax==0
+						mov _readyNext, 1
+					.endif
+				.endif
+			.endif
+
+			;********************************************************************
+			; 上下左右
+			;********************************************************************
+			.if keys.up != 0
+				.if _readyNext==0
+					invoke _TryChangeStatus
+				.endif
+				mov keys.up, 0
+			.endif
+
+			.if keys.left!=0
+				.if _readyNext==0
+					invoke _TryMove, 0, -1
+				.endif
+				mov keys.left, 0
+			.endif
+
+			.if keys.right!=0
+				.if _readyNext==0
+					invoke _TryMove, 0, 1
+				.endif
+				mov keys.right, 0
+			.endif
+
+			.if keys.down!=0
+				.if _readyNext==0
+					invoke _TryMove, 1, 0
+					.if eax==1
+						mov _sinceLastMoveDown, 0
+					.endif
+				.endif
+				mov keys.down, 0
+			.endif
+			
+			.if keys.n3!=0
+				invoke _GetNextBlock
+				mov keys.n3, 0
+			.endif
+
+		.elseif _page == MULTIPLE_GAME_PAGE
+
+		.endif
+
+		popad
 		ret
 _ComeputeGameLogic	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

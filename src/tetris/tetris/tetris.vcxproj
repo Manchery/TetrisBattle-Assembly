@@ -153,7 +153,10 @@
     <Image Include="resources\test.bmp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="draw.inc" />
     <None Include="network.inc" />
+    <None Include="tetris2.inc" />
+    <None Include="utils.inc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
