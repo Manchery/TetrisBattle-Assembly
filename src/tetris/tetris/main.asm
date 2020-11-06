@@ -514,7 +514,7 @@ _DrawCustomizedBackground	proc _hDC
 			;invoke	SelectObject, @dcBack, _bg3
 			;invoke	BitBlt,@hDcBack,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @dcBack,0,0,SRCCOPY
 			invoke TextOutA, @hDcBack, 500, 380, addr _ipStr, _ipLen
-		.elseif _status == 3
+		.elseif _page == 3
 			invoke	SelectObject, @hDcBack, _bg4
 		.elseif _page == 4
 			invoke	SelectObject, @hDcBack, _bg5
@@ -928,23 +928,15 @@ _ComputeGameLogic	proc  _hWnd
 				mov _page, MULTIPLE_CONNECT_PAGE
 				mov keys.return, 0
 			.endif
-			mov keys.left, 0
-		.elseif keys.return;按回车
-			.if _status == 0
-				mov _status, 3
-			.elseif _status == 1
-				mov _status, 2
-			.elseif _status == 2
-				invoke	RtlZeroMemory,offset serverIpAddr,sizeof serverIpAddr
-				invoke _CopyMemory,offset serverIpAddr,offset _ipStr,_ipLen
-				invoke _Connect, _hWnd
-				mov _status, 5
-			.elseif _status == 5
-				mov _status, 6
-			.endif
-			mov keys.return, 0
-		.elseif keys.back;按退格
-			.if _status == 2
+		; @@@@@@@@@@@@@@@@@@@@ 多人:准备连接 @@@@@@@@@@@@@@@@@@@@@
+		.elseif _page == MULTIPLE_CONNECT_PAGE
+			.if keys.return
+				invoke	RtlZeroMemory,addr serverIpAddr,sizeof serverIpAddr
+				invoke _CopyMemory,addr serverIpAddr,addr _ipStr,_ipLen
+				invoke _Connect
+				mov _page, MULTIPLE_READY_PAGE
+				mov keys.return, 0
+			.elseif keys.back
 				.if _ipLen > 0
 					dec _ipLen
 				.endif
