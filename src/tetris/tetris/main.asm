@@ -926,6 +926,30 @@ _OnPaint	proc	_hWnd,_hDC
 			invoke _GameDrawCommon, @bufferDC
 
 			;********************************************************************
+			; 画对方地图
+			;********************************************************************
+
+			mov @i, 0
+			mov @j, 0
+			mov eax, ADDR _othermap
+			mov esi, _playerNum
+			dec esi
+			.while @i < 4
+				.if @i != esi
+					.if @j==0
+						invoke _DrawOtherMap, @bufferDC, eax, 604, 393, 15
+					.elseif @j==1
+						invoke _DrawOtherMap, @bufferDC, eax, 809, 393, 15
+					.elseif @j==2
+						invoke _DrawOtherMap, @bufferDC, eax, 1009, 393, 15
+					.endif
+					inc @j
+				.endif
+				inc @i
+				add eax, 200
+			.endw
+
+			;********************************************************************
 			; 道具发动
 			;********************************************************************
 			.if _blackScreeningRemain
@@ -969,6 +993,7 @@ _OnPaint	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _GameComputeCommon	proc
+		local @receivedMsg:NetworkMsg, @sendMsg:NetworkMsg
 		pushad
 
 		inc _sinceLastMoveDown
@@ -986,19 +1011,19 @@ _GameComputeCommon	proc
 				invoke _ReduceLines, 0
 					
 				.if eax==1
-					add _scores, 5
+					add _scores, 10
 				.elseif eax==2
-					add _scores, 15
+					add _scores, 25
 					invoke _GetRandomIndex, 3
 					inc _tools[eax*4]
 				.elseif eax==3
-					add _scores, 30
+					add _scores, 50
 					invoke _GetRandomIndex, 3
 					inc _tools[eax*4]
 					invoke _GetRandomIndex, 3
 					inc _tools[eax*4]
 				.elseif eax==4
-					add _scores, 50
+					add _scores, 80
 					invoke _GetRandomIndex, 3
 					inc _tools[eax*4]
 					invoke _GetRandomIndex, 3
@@ -1024,6 +1049,17 @@ _GameComputeCommon	proc
 			invoke _PositionValid, _currentBlock, _currentStatus, _currentPosI, _currentPosJ
 			.if eax==0
 				mov _gameover, 1
+
+				.if (_page == MULTIPLE_GAME_PAGE)
+					mov @sendMsg.inst, 5
+					mov eax, _playerNum
+					mov @sendMsg.sender, eax
+					mov @sendMsg.recver, 0
+					mov @sendMsg.msglen, 0
+					invoke _QueuePush, offset outputQueue, addr @sendMsg
+					invoke _SendData
+				.endif
+
 			.endif
 
 			invoke _GetNextBlock
@@ -1093,6 +1129,35 @@ _GameComputeCommon	proc
 		ret
 _GameComputeCommon endp
 
+_SendMap proc
+	local @receivedMsg:NetworkMsg, @sendMsg:NetworkMsg
+	local @i
+	pushad
+	
+	mov @sendMsg.inst, 3
+	mov eax, _playerNum
+	mov @sendMsg.sender, eax
+	mov @sendMsg.recver, 0
+	mov @sendMsg.msglen, 50
+
+	mov @i, 0
+	.while @i<200
+		mov ebx, _map[@i*4]
+		mov eax, @i
+		.if ebx!=0
+			mov BYTE PTR @sendMsg.msg[eax], 1
+		.else
+			mov BYTE PTR @sendMsg.msg[eax], 0
+		.endif
+		inc @i
+	.endw
+
+	invoke _QueuePush, offset outputQueue, addr @sendMsg
+	invoke _SendData
+
+	popad
+	ret
+_SendMap endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ComputeGameLogic	proc  _hWnd
@@ -1106,7 +1171,7 @@ _ComputeGameLogic	proc  _hWnd
 				mov keys.right, HOME_MULTIPLE_PAGE
 			.elseif keys.return
 				mov _page, SINGLE_GAME_PAGE
-				invoke _InitSingleGame
+				invoke _InitGameStatus
 				mov keys.return, 0
 			.endif
 		; @@@@@@@@@@@@@@@@@@@@ 主页:选中多人 @@@@@@@@@@@@@@@@@@@@@
@@ -1254,6 +1319,7 @@ _ComputeGameLogic	proc  _hWnd
 				.if @receivedMsg.inst == 2
 					movzx eax, byte ptr @receivedMsg.msg
 					mov _playerCount, eax
+					invoke _InitGameStatus
 					mov _page, MULTIPLE_GAME_PAGE
 				.endif
 			.elseif keys.escape
@@ -1313,29 +1379,6 @@ _ComputeGameLogic	proc  _hWnd
 					mov keys.space, 0
 				.endif
 
-				;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
-				.if keys.n4!=0
-					mov _blackScreeningRemain, 300
-					mov keys.n4, 0
-				.endif
-
-				.if keys.n5!=0
-					mov _bombPicRemain, 100
-					invoke _Bomb
-					mov keys.n5, 0
-				.endif
-
-				.if keys.n6!=0
-					mov _specialBlockRemain, 3
-					invoke _GetNextBlock
-					mov keys.n6, 0
-				.endif
-
-				.if keys.n7!=0
-					add _scores, 10
-					mov keys.n7, 0
-				.endif
-				;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
 			.elseif (_paused==1)
 				.if keys.space != 0
 					mov _paused, 0
@@ -1349,28 +1392,105 @@ _ComputeGameLogic	proc  _hWnd
 			.endif
 
 		.elseif _page == MULTIPLE_GAME_PAGE
+			.if (_gameover==0)
+				invoke _GameComputeCommon
 
-			invoke _GameComputeCommon
-
-			;********************************************************************
-			; 道具
-			;********************************************************************
-			.if keys.n1!=0
-				.if _tools[0]>0
-					;TODO emit tools 1
+				mov eax, _sinceSendMap
+				.if eax >= _sendMapInternal
+					invoke _SendMap
+					mov _sinceSendMap, 0
 				.endif
-				mov keys.n1, 0
-			.endif
 
-			.if keys.n2!=0
-				.if _tools[4]>0
-					;TODO emit tools 2
+				;********************************************************************
+				; 道具发出
+				;********************************************************************
+				.if keys.n1!=0
+					.if _tools[0]>0
+						mov @sendMsg.inst, 11
+						mov eax, _playerNum
+						mov @sendMsg.sender, eax
+						mov @sendMsg.recver, 0
+						mov @sendMsg.msglen, 0
+						invoke _QueuePush, offset outputQueue, addr @sendMsg
+						invoke _SendData
+					.endif
+					mov keys.n1, 0
 				.endif
-				mov keys.n2, 0
-			.endif
+
+				.if keys.n2!=0
+					.if _tools[4]>0
+						mov @sendMsg.inst, 9
+						mov eax, _playerNum
+						mov @sendMsg.sender, eax
+						mov @sendMsg.recver, 0
+						mov @sendMsg.msglen, 0
+						invoke _QueuePush, offset outputQueue, addr @sendMsg
+						invoke _SendData
+					.endif
+					mov keys.n2, 0
+				.endif
 			
-			.if keys.n3!=0
-				;TODO emit tools 3
+				.if keys.n3!=0
+					.if _tools[8]>0
+						mov @sendMsg.inst, 13
+						mov eax, _playerNum
+						mov @sendMsg.sender, eax
+						mov @sendMsg.recver, 0
+						mov @sendMsg.msglen, 0
+						invoke _QueuePush, offset outputQueue, addr @sendMsg
+						invoke _SendData
+					.endif
+					mov keys.n3, 0
+				.endif
+
+				;********************************************************************
+				; 收到消息
+				;********************************************************************
+				.if inputQueue.len != 0
+					invoke _QueuePop, offset inputQueue, addr @receivedMsg
+
+					;********************************************************************
+					; 道具收到
+					;********************************************************************
+					.if @receivedMsg.inst == 12
+						.if @receivedMsg.sender == 0
+							mov _blackScreeningRemain, 300
+						.endif
+					.endif
+					.if @receivedMsg.inst == 10
+						.if @receivedMsg.sender == 0
+							mov _bombPicRemain, 100
+							invoke _Bomb
+						.endif
+					.endif
+					.if @receivedMsg.inst == 14
+						.if @receivedMsg.sender == 0
+							mov _specialBlockRemain, 3
+							invoke _GetNextBlock
+						.endif
+					.endif
+
+					;********************************************************************
+					; 收到地图
+					;********************************************************************
+					.if @receivedMsg.inst == 4
+						mov eax, @receivedMsg.sender
+						dec eax
+						mov ecx, 200
+						mul ecx
+						mov esi, ADDR _othermap
+						add esi, eax
+						
+						mov @i, 0
+						.while @i<200
+							mov ecx, @i
+							mov eax, @receivedMsg[ecx]
+							mov [esi], eax 
+							inc @i
+							inc esi
+						.endw
+					.endif
+				.endif
 			.endif
 
 		.endif
