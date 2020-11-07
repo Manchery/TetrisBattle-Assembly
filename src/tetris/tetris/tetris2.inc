@@ -303,11 +303,19 @@ _moveDownInternal dd 50			; 当前块下移的时间间隔
 
 _scores dd 0					; 分数
 
+_slowingRemain dword 0				; 减慢剩余块数
+_slowingMoveDownInternal dword 0	; 减慢时的速度
+
+_tools dword 0, 0, 1
+
 .code
 
 ; 尝试消去满行
-_ReduceLines proc 
-	local @i, @j, @k
+; _force：强制消掉底下若干行
+_ReduceLines proc _force
+	local @i, @j, @k, @lines
+
+	mov @lines, 0
 
 	pushad
 
@@ -339,7 +347,7 @@ _ReduceLines proc
 
 		pop esi
 		
-		.if eax!=1
+		.if (_force==0) && (eax!=1)
 			; 未满则保留
 			mov eax, @j
 			mov ebx, _mapWidth
@@ -359,8 +367,11 @@ _ReduceLines proc
 
 			dec @j
 		.else
-			; 消去加分
-			add _scores, 100 
+			; 消去一行
+			inc @lines 
+			.if _force>0
+				dec _force
+			.endif
 		.endif
 
 		dec @i
@@ -384,6 +395,7 @@ _ReduceLines proc
 	.endw
 
 	popad
+	mov eax, @lines
 	ret
 _ReduceLines endp
 

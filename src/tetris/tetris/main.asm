@@ -1075,7 +1075,24 @@ _ComputeGameLogic	proc  _hWnd
 					; 写入地图
 					invoke _WriteMap, _currentBlock, _currentStatus, _currentPosI, _currentPosJ, _currentColor
 					; 计算消行
-					invoke _ReduceLines
+					invoke _ReduceLines, 0
+					
+					;TODO: 开局分发道具
+					.if eax==1
+						add _scores, 5
+					.elseif eax==2
+						add _scores, 15
+					.elseif eax==3
+						add _scores, 30
+						invoke _GetRandomIndex, 3
+						inc _tools[eax]
+					.elseif eax==4
+						add _scores, 50
+						invoke _GetRandomIndex, 3
+						inc _tools[eax]
+						invoke _GetRandomIndex, 3
+						inc _tools[eax]
+					.endif
 				.endif
 
 				mov eax, _nextBlock
@@ -1101,12 +1118,24 @@ _ComputeGameLogic	proc  _hWnd
 
 			; 块自然下落
 			.if _readyNext==0
-				mov eax, _sinceLastMoveDown
-				.if eax >=_moveDownInternal
-					invoke _TryMove, 1, 0
-					mov _sinceLastMoveDown, 0
-					.if eax==0
-						mov _readyNext, 1
+				.if _slowingRemain==0
+					mov eax, _sinceLastMoveDown
+					.if eax >=_moveDownInternal
+						invoke _TryMove, 1, 0
+						mov _sinceLastMoveDown, 0
+						.if eax==0
+							mov _readyNext, 1
+						.endif
+					.endif
+				.else
+					mov eax, _sinceLastMoveDown
+					.if eax >=_slowingMoveDownInternal
+						invoke _TryMove, 1, 0
+						mov _sinceLastMoveDown, 0
+						.if eax==0
+							mov _readyNext, 1
+							dec _slowingRemain
+						.endif
 					.endif
 				.endif
 			.endif
@@ -1144,9 +1173,35 @@ _ComputeGameLogic	proc  _hWnd
 				.endif
 				mov keys.down, 0
 			.endif
+
+			;********************************************************************
+			; 道具
+			;********************************************************************
+			.if keys.n1!=0
+				.if _tools[0]>0
+					invoke _ReduceLines, 3
+					dec _tools[0]
+				.endif
+				mov keys.n1, 0
+			.endif
+
+			.if keys.n2!=0
+				.if _tools[4]>0
+					mov _slowingRemain, 1
+					mov eax, _moveDownInternal
+					sal eax, 1								;两倍时间间隔
+					mov _slowingMoveDownInternal, eax
+					
+					dec _tools[4]
+				.endif
+				mov keys.n2, 0
+			.endif
 			
 			.if keys.n3!=0
-				invoke _GetNextBlock
+				.if _tools[8]>0
+					invoke _GetNextBlock
+					dec _tools[8]
+				.endif
 				mov keys.n3, 0
 			.endif
 
