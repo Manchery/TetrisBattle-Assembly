@@ -49,23 +49,19 @@ szErrBind	db	'绑定到TCP端口10086时出错，请检查是否有其它程序在使用!',0
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 		.code
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-; 断开连接
+; 重置
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_Disconnect	proc
+_Reset	proc
 		local @cnt:dword
 		pushad
 
 		;清理缓冲区和变量
 		mov inputQueue.len,		0
 		mov	_players, 0
+		mov _readyPlayers, 0
+		mov _onPlaying, 0
 
-		;断开监听套接字
-		.if	hListenSocket
-			invoke	closesocket,hListenSocket
-			xor	eax,eax
-			mov	hListenSocket,eax
-		.endif
-
+		;清理结构体等
 		mov esi, offset _sockets
 		mov edi, offset _playerMsgs
 		mov	@cnt, 0
@@ -82,6 +78,8 @@ _Disconnect	proc
 				mov (Client ptr [edi]).outputQueue.len, 0
 				xor	eax,eax
 				mov	[esi],eax
+				mov eax, @cnt
+				mov dword ptr _playersAlive[4 * eax], 0
 			.endif
 			add esi, 4
 			add edi, type Client
@@ -93,7 +91,28 @@ _Disconnect	proc
 		;invoke _ShowDisconnectScreen
 		popad
 		ret
+_Reset	endp
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 断开连接
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_Disconnect	proc
+		pushad
+
+		;断开监听套接字
+		.if	hListenSocket
+			invoke	closesocket,hListenSocket
+			xor	eax,eax
+			mov	hListenSocket,eax
+		.endif
+
+		;清理变量等
+		invoke _Reset
+
+		popad
+		ret
 _Disconnect	endp
+
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 连接到服务器
@@ -152,8 +171,7 @@ _OnSocketClose proc @closedSocket
 		.if(eax == hListenSocket)
 			;监听服务器已关闭
 			;关闭所有余下链接，终止服务器
-			;TODO:关闭所有余下链接
-			invoke closesocket, hListenSocket
+			invoke _Disconnect
 			invoke ExitProcess, 0
 		.endif
 		;用户连接已关闭
@@ -175,12 +193,16 @@ _OnSocketClose proc @closedSocket
 				mov (Client ptr [edi]).outputQueue.len, 0
 				xor	eax,eax
 				mov	[esi],eax
+				mov eax, @cnt
+				mov dword ptr _playersAlive[4 * eax], 0
 				.break
 			.endif
 			add esi, 4
 			add edi, type Client
 			inc @cnt
 		.endw
+
+
 		ret
 _OnSocketClose	endp
 
@@ -805,7 +827,7 @@ _OnPaint	endp
 _OnSendingMsg	proc  _hWnd
 		local @testNetworkMsg:NetworkMsg
 		;TODO 在这里写服务器的发送事件的逻辑
-
+		;TODO 在这里判断游戏结束等内容，而不要在_OnSocketClose或_Reset中判断
 		
 		ret
 _OnSendingMsg	endp
@@ -830,7 +852,7 @@ _ProcessTimer	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 响应接收到事件时的操作
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_OnRecevingMsg proc 
+_OnReceivingMsg proc 
 		local @receivedMsg:NetworkMsg, @sentMsg:NetworkMsg
 		.while inputQueue.len != 0
 			;提取消息
@@ -857,10 +879,8 @@ _OnRecevingMsg proc
 				.if eax == _readyPlayers
 					;所有玩家都已经准备好，游戏开始
 					mov _onPlaying, 1
+					invoke RtlZeroMemory, addr @sentMsg, type NetworkMsg
 					mov @sentMsg.inst, 2
-					mov @sentMsg.sender, 0
-					mov @sentMsg.recver, 0
-					mov @sentMsg.msglen, 0
 					mov eax, _players
 					mov byte ptr @sentMsg.msg[0], al
 					invoke _SendMsgTo, 0, addr @sentMsg
@@ -879,7 +899,7 @@ _OnRecevingMsg proc
 			.endif
 		.endw
 		ret
-_OnRecevingMsg endp
+_OnReceivingMsg endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
@@ -896,7 +916,7 @@ _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam
 			mov	eax,lParam
 			.if	ax ==	FD_READ
 				invoke	_RecvData, wParam
-				invoke	_OnRecevingMsg
+				invoke	_OnReceivingMsg
 			.elseif	ax ==	FD_WRITE
 				invoke	_SendData, wParam	;继续发送缓冲区数据
 			.elseif	ax ==	FD_CLOSE
