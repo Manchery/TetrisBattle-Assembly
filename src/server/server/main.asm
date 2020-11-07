@@ -922,9 +922,12 @@ _OnSendingMsg	proc  _hWnd
 			mov @i, 0
 			invoke RtlZeroMemory, addr @status, 4
 			mov edx, _players
-			.while edx >= @i
+			.while edx > @i
 				mov eax, @i
 				mov ebx, dword ptr _sockets[eax * 4]
+				.if ebx > 0
+					mov ebx, 1
+				.endif
 				and ebx, dword ptr _playerAlive[eax * 4]
 				or	@flag, ebx
 				mov byte ptr @status[eax], bl
@@ -941,7 +944,7 @@ _OnSendingMsg	proc  _hWnd
 			;·¢ËÍµØÍ¼
 			mov @i, 0
 			mov edx, _players
-			.while edx >= @i
+			.while edx > @i
 				invoke RtlZeroMemory, addr @sentMsg, type NetworkMsg
 				mov eax, @i
 				mov @sentMsg.inst, 4
@@ -1025,6 +1028,7 @@ _OnReceivingMsg proc
 					mov _onPlaying, 1
 					invoke RtlZeroMemory, addr @sentMsg, type NetworkMsg
 					mov @sentMsg.inst, 2
+					mov @sentMsg.msglen, 1
 					mov eax, _players
 					mov byte ptr @sentMsg.msg[0], al
 					invoke _SendMsgTo, 0, addr @sentMsg

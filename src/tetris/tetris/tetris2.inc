@@ -159,19 +159,26 @@ _DrawSquare endp
 
 .data
 _playerRemain dword 0
+WINDOW_WIDTH  equ 1200
+WINDOW_HEIGHT equ 960
 .code
 
 _DrawOtherMap proc _hDC, @map, _offsetX, _offsetY, _sideLength
-	local @hDc
+	local @hDc, @hBmp, @brush
 	local @i, @j
 	pushad
 
 	invoke	CreateCompatibleDC, _hDC
 	mov		@hDc, eax
+	invoke	CreateCompatibleBitmap, _hDC, WINDOW_WIDTH, WINDOW_HEIGHT 
+	mov		@hBmp, eax
+	invoke	SelectObject, @hDc, @hBmp
 
-	invoke	GetStockObject, WHITE_BRUSH
+	invoke	GetStockObject, GRAY_BRUSH
+	mov		@brush, eax
 	invoke	SelectObject, @hDc, eax
-	invoke	DeleteObject, eax
+
+	mov esi, @map
 
 	mov @i, 0
 	.while @i<20
@@ -183,7 +190,7 @@ _DrawOtherMap proc _hDC, @map, _offsetX, _offsetY, _sideLength
 			mul ecx
 			add eax, @j
 
-			.if @map[eax]!=0
+			.if byte ptr [esi] != 0
 				
 				mov eax, @i
 				mov ecx, _sideLength
@@ -202,10 +209,16 @@ _DrawOtherMap proc _hDC, @map, _offsetX, _offsetY, _sideLength
 			.endif
 
 			inc @j
+			add esi, 4
 		.endw
 		inc @i
 	.endw
 
+	invoke	TransparentBlt, _hDC,0,0,WINDOW_WIDTH,WINDOW_HEIGHT,\
+	@hDc,0,0,WINDOW_WIDTH,WINDOW_HEIGHT,0;过滤黑色，只把灰色砖块贴到hDC上
+	
+	invoke	DeleteObject, @brush
+	invoke	DeleteObject, @hBmp
 	invoke	DeleteDC, @hDc
 	popad
 	ret

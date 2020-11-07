@@ -1133,7 +1133,7 @@ _SendMap proc
 	mov eax, _playerNum
 	mov @sendMsg.sender, eax
 	mov @sendMsg.recver, 0
-	mov @sendMsg.msglen, 50
+	mov @sendMsg.msglen, 200
 
 	mov @i, 0
 	.while @i<200
@@ -1390,7 +1390,7 @@ _ComputeGameLogic	proc  _hWnd
 		.elseif _page == MULTIPLE_GAME_PAGE
 			.if (_gameover==0)
 				invoke _GameComputeCommon
-
+				inc _sinceSendMap
 				mov eax, _sinceSendMap
 				.if eax >= _sendMapInternal
 					invoke _SendMap
@@ -1402,6 +1402,7 @@ _ComputeGameLogic	proc  _hWnd
 				;********************************************************************
 				.if keys.n1!=0
 					.if _tools[0]>0
+						dec	_tools[0]
 						mov @sendMsg.inst, 11
 						mov eax, _playerNum
 						mov @sendMsg.sender, eax
@@ -1415,6 +1416,7 @@ _ComputeGameLogic	proc  _hWnd
 
 				.if keys.n2!=0
 					.if _tools[4]>0
+						dec	_tools[4]
 						mov @sendMsg.inst, 9
 						mov eax, _playerNum
 						mov @sendMsg.sender, eax
@@ -1428,6 +1430,7 @@ _ComputeGameLogic	proc  _hWnd
 			
 				.if keys.n3!=0
 					.if _tools[8]>0
+						dec	_tools[8]
 						mov @sendMsg.inst, 13
 						mov eax, _playerNum
 						mov @sendMsg.sender, eax
@@ -1456,18 +1459,18 @@ _ComputeGameLogic	proc  _hWnd
 				; 道具收到
 				;********************************************************************
 				.if _gameover==0
-					.if @receivedMsg.inst == 12
+					.if @receivedMsg.inst == 14
 						.if @receivedMsg.sender == 0
 							mov _blackScreeningRemain, 300
 						.endif
 					.endif
-					.if @receivedMsg.inst == 10
+					.if @receivedMsg.inst == 12
 						.if @receivedMsg.sender == 0
 							mov _bombPicRemain, 100
 							invoke _Bomb
 						.endif
 					.endif
-					.if @receivedMsg.inst == 14
+					.if @receivedMsg.inst == 10
 						.if @receivedMsg.sender == 0
 							mov _specialBlockRemain, 3
 							invoke _GetNextBlock
