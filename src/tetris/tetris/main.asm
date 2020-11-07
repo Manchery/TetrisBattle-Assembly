@@ -1221,6 +1221,12 @@ _ComputeGameLogic	proc  _hWnd
 				invoke _Bomb
 				mov keys.n5, 0
 			.endif
+
+			.if keys.n6!=0
+				mov _specialBlockRemain, 3
+				invoke _GetNextBlock
+				mov keys.n6, 0
+			.endif
 			;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
 
 		.elseif _page == MULTIPLE_GAME_PAGE

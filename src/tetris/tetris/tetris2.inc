@@ -69,6 +69,21 @@ _blockOffset	dword	2,0, 2,1, 2,2, 2,3 ;I
 				dword	1,0, 1,1, 2,1, 2,2
 				dword	0,1, 1,0, 1,1, 2,0
 
+				dword	0,0, 0,2, 2,0, 2,2; special 1
+				dword	0,0, 0,2, 2,0, 2,2
+				dword	0,0, 0,2, 2,0, 2,2
+				dword	0,0, 0,2, 2,0, 2,2
+
+				dword	0,1, 1,0, 1,2, 2,1; special 2
+				dword	0,1, 1,0, 1,2, 2,1
+				dword	0,1, 1,0, 1,2, 2,1
+				dword	0,1, 1,0, 1,2, 2,1
+
+				dword	0,1, 1,2, 2,1, 3,2; special 3
+				dword	2,0, 1,1, 2,2, 1,3
+				dword	0,1, 1,2, 2,1, 3,2
+				dword	2,0, 1,1, 2,2, 1,3
+
 ; 7 种形状的初始位置
 _blockInitPos	dword	-2,3; I
 				dword	0,4;J
@@ -77,6 +92,9 @@ _blockInitPos	dword	-2,3; I
 				dword	0,4;S
 				dword	0,4;T
 				dword	0,4;Z
+				dword	0,3;special 1
+				dword	0,3;special 1
+				dword	0,3;special 1
 
 .code
 
@@ -378,6 +396,10 @@ _InitSingleGame proc
 	invoke _GetRandomIndex, 3
 	inc _tools[eax*4]
 
+	mov _blackScreeningRemain, 0
+	mov _bombPicRemain, 0
+	mov _specialBlockRemain, 0
+
 	pop eax
 	ret
 _InitSingleGame endp
@@ -471,31 +493,6 @@ _ReduceLines proc _force
 	ret
 _ReduceLines endp
 
-
-_GetNextBlock proc
-	push eax
-	push ebx
-
-	invoke _GetRandomIndex, 7
-	mov _nextBlock, eax
-	invoke _GetRandomIndex, 8
-	mov _nextColor, eax
-	inc _nextColor
-
-	mov ebx, _nextBlock
-	mov eax, _blockInitPos[ebx * 8]
-	mov _nextPosI, eax
-	mov eax, _blockInitPos[ebx * 8 + 4]
-	mov _nextPosJ, eax
-
-	mov _nextStatus, 0
-
-	pop ebx
-	pop eax
-
-	ret
-_GetNextBlock endp
-
 _UpdateMoveDownInternal proc
 	.if _scores < 50
 		mov _moveDownInternal, 50
@@ -523,6 +520,7 @@ _UpdateMoveDownInternal endp
 
 _blackScreeningRemain dword 0
 _bombPicRemain dword 0
+_specialBlockRemain dword 0
 
 _bombProb EQU 20
 
@@ -547,3 +545,36 @@ _Bomb proc
 	popad
 	ret
 _Bomb endp
+
+
+_GetNextBlock proc
+	push eax
+	push ebx
+
+	.if _specialBlockRemain==0
+		invoke _GetRandomIndex, 7
+		mov _nextBlock, eax
+	.elseif
+		invoke _GetRandomIndex, 3
+		add eax, 7
+		mov _nextBlock, eax
+		dec _specialBlockRemain
+	.endif
+	
+	invoke _GetRandomIndex, 8
+	mov _nextColor, eax
+	inc _nextColor
+
+	mov ebx, _nextBlock
+	mov eax, _blockInitPos[ebx * 8]
+	mov _nextPosI, eax
+	mov eax, _blockInitPos[ebx * 8 + 4]
+	mov _nextPosJ, eax
+
+	mov _nextStatus, 0
+
+	pop ebx
+	pop eax
+
+	ret
+_GetNextBlock endp
