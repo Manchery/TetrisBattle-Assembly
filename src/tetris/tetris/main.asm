@@ -873,6 +873,13 @@ _OnPaint	proc	_hWnd,_hDC
 			.endif
 		.endif
 
+		.if (_page == SINGLE_GAME_PAGE)
+			.if _paused==1
+				; TODO: 暂停贴图
+				invoke _DrawBlackScreen, @bufferDC
+			.endif
+		.endif
+
 		;@@@@@@@@@@@@@@@@@@@@@@@@@@ DEV
 		.if (_page == SINGLE_GAME_PAGE)
 			.if _blackScreeningRemain
@@ -1065,169 +1072,181 @@ _ComputeGameLogic	proc  _hWnd
 			.endif
 		; @@@@@@@@@@@@@@@@@@@@ 单人: 游戏 @@@@@@@@@@@@@@@@@@@@@
 		.elseif _page == SINGLE_GAME_PAGE
-			inc _sinceLastMoveDown
+			.if _paused==0
+				inc _sinceLastMoveDown
 
-			;TODO: game start init
+				;TODO: game start init
 
-			.if _currentBlock == -1
-				invoke _GetNextBlock
-			.endif
-
-			;切换到下一个块
-			.if _readyNext==1
-				.if _currentBlock != -1
-					; 写入地图
-					invoke _WriteMap, _currentBlock, _currentStatus, _currentPosI, _currentPosJ, _currentColor
-					; 计算消行
-					invoke _ReduceLines, 0
-					
-					.if eax==1
-						add _scores, 5
-					.elseif eax==2
-						add _scores, 15
-					.elseif eax==3
-						add _scores, 30
-						invoke _GetRandomIndex, 3
-						inc _tools[eax*4]
-					.elseif eax==4
-						add _scores, 50
-						invoke _GetRandomIndex, 3
-						inc _tools[eax*4]
-						invoke _GetRandomIndex, 3
-						inc _tools[eax*4]
-					.endif
-
-					invoke _UpdateMoveDownInternal
-				.endif
-
-				mov eax, _nextBlock
-				mov _currentBlock, eax
-				mov eax, _nextColor
-				mov _currentColor, eax
-				mov eax, _nextPosI
-				mov _currentPosI, eax
-				mov eax, _nextPosJ
-				mov _currentPosJ, eax
-				mov eax, _nextStatus
-				mov _currentStatus, eax
-
-				invoke _PositionValid, _currentBlock, _currentStatus, _currentPosI, _currentPosJ
-				.if eax==0
-					;TODO: gameover
-				.endif
-
-				invoke _GetNextBlock
-
-				mov _readyNext, 0
-			.endif
-
-			; 块自然下落
-			.if _readyNext==0
-				.if _slowingRemain==0
-					mov eax, _sinceLastMoveDown
-					.if eax >=_moveDownInternal
-						invoke _TryMove, 1, 0
-						mov _sinceLastMoveDown, 0
-						.if eax==0
-							mov _readyNext, 1
-						.endif
-					.endif
-				.else
-					mov eax, _sinceLastMoveDown
-					.if eax >=_slowingMoveDownInternal
-						invoke _TryMove, 1, 0
-						mov _sinceLastMoveDown, 0
-						.if eax==0
-							mov _readyNext, 1
-							dec _slowingRemain
-						.endif
-					.endif
-				.endif
-			.endif
-
-			;********************************************************************
-			; 上下左右
-			;********************************************************************
-			.if keys.up != 0
-				.if _readyNext==0
-					invoke _TryChangeStatus
-				.endif
-				mov keys.up, 0
-			.endif
-
-			.if keys.left!=0
-				.if _readyNext==0
-					invoke _TryMove, 0, -1
-				.endif
-				mov keys.left, 0
-			.endif
-
-			.if keys.right!=0
-				.if _readyNext==0
-					invoke _TryMove, 0, 1
-				.endif
-				mov keys.right, 0
-			.endif
-
-			.if keys.down!=0
-				.if _readyNext==0
-					invoke _TryMove, 1, 0
-					.if eax==1
-						mov _sinceLastMoveDown, 0
-					.endif
-				.endif
-				mov keys.down, 0
-			.endif
-
-			;********************************************************************
-			; 道具
-			;********************************************************************
-			.if keys.n1!=0
-				.if _tools[0]>0
-					invoke _ReduceLines, 3
-					dec _tools[0]
-				.endif
-				mov keys.n1, 0
-			.endif
-
-			.if keys.n2!=0
-				.if _tools[4]>0
-					mov _slowingRemain, 1
-					mov eax, _moveDownInternal
-					sal eax, 1								;两倍时间间隔
-					mov _slowingMoveDownInternal, eax
-					
-					dec _tools[4]
-				.endif
-				mov keys.n2, 0
-			.endif
-			
-			.if keys.n3!=0
-				.if _tools[8]>0
+				.if _currentBlock == -1
 					invoke _GetNextBlock
-					dec _tools[8]
 				.endif
-				mov keys.n3, 0
-			.endif
 
-			;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
-			.if keys.n4!=0
-				mov _blackScreeningRemain, 300
-				mov keys.n4, 0
-			.endif
+				;切换到下一个块
+				.if _readyNext==1
+					.if _currentBlock != -1
+						; 写入地图
+						invoke _WriteMap, _currentBlock, _currentStatus, _currentPosI, _currentPosJ, _currentColor
+						; 计算消行
+						invoke _ReduceLines, 0
+					
+						.if eax==1
+							add _scores, 5
+						.elseif eax==2
+							add _scores, 15
+						.elseif eax==3
+							add _scores, 30
+							invoke _GetRandomIndex, 3
+							inc _tools[eax*4]
+						.elseif eax==4
+							add _scores, 50
+							invoke _GetRandomIndex, 3
+							inc _tools[eax*4]
+							invoke _GetRandomIndex, 3
+							inc _tools[eax*4]
+						.endif
 
-			.if keys.n5!=0
-				mov _bombPicRemain, 100
-				invoke _Bomb
-				mov keys.n5, 0
-			.endif
+						invoke _UpdateMoveDownInternal
+					.endif
 
-			.if keys.n6!=0
-				mov _specialBlockRemain, 3
-				invoke _GetNextBlock
-				mov keys.n6, 0
+					mov eax, _nextBlock
+					mov _currentBlock, eax
+					mov eax, _nextColor
+					mov _currentColor, eax
+					mov eax, _nextPosI
+					mov _currentPosI, eax
+					mov eax, _nextPosJ
+					mov _currentPosJ, eax
+					mov eax, _nextStatus
+					mov _currentStatus, eax
+
+					invoke _PositionValid, _currentBlock, _currentStatus, _currentPosI, _currentPosJ
+					.if eax==0
+						;TODO: gameover
+					.endif
+
+					invoke _GetNextBlock
+
+					mov _readyNext, 0
+				.endif
+
+				; 块自然下落
+				.if _readyNext==0
+					.if _slowingRemain==0
+						mov eax, _sinceLastMoveDown
+						.if eax >=_moveDownInternal
+							invoke _TryMove, 1, 0
+							mov _sinceLastMoveDown, 0
+							.if eax==0
+								mov _readyNext, 1
+							.endif
+						.endif
+					.else
+						mov eax, _sinceLastMoveDown
+						.if eax >=_slowingMoveDownInternal
+							invoke _TryMove, 1, 0
+							mov _sinceLastMoveDown, 0
+							.if eax==0
+								mov _readyNext, 1
+								dec _slowingRemain
+							.endif
+						.endif
+					.endif
+				.endif
+
+				;********************************************************************
+				; 上下左右
+				;********************************************************************
+				.if keys.up != 0
+					.if _readyNext==0
+						invoke _TryChangeStatus
+					.endif
+					mov keys.up, 0
+				.endif
+
+				.if keys.left!=0
+					.if _readyNext==0
+						invoke _TryMove, 0, -1
+					.endif
+					mov keys.left, 0
+				.endif
+
+				.if keys.right!=0
+					.if _readyNext==0
+						invoke _TryMove, 0, 1
+					.endif
+					mov keys.right, 0
+				.endif
+
+				.if keys.down!=0
+					.if _readyNext==0
+						invoke _TryMove, 1, 0
+						.if eax==1
+							mov _sinceLastMoveDown, 0
+						.endif
+					.endif
+					mov keys.down, 0
+				.endif
+
+				;********************************************************************
+				; 道具
+				;********************************************************************
+				.if keys.n1!=0
+					.if _tools[0]>0
+						invoke _ReduceLines, 3
+						dec _tools[0]
+					.endif
+					mov keys.n1, 0
+				.endif
+
+				.if keys.n2!=0
+					.if _tools[4]>0
+						mov _slowingRemain, 1
+						mov eax, _moveDownInternal
+						sal eax, 1								;两倍时间间隔
+						mov _slowingMoveDownInternal, eax
+					
+						dec _tools[4]
+					.endif
+					mov keys.n2, 0
+				.endif
+			
+				.if keys.n3!=0
+					.if _tools[8]>0
+						invoke _GetNextBlock
+						dec _tools[8]
+					.endif
+					mov keys.n3, 0
+				.endif
+
+				.if keys.space != 0
+					mov _paused, 1
+					mov keys.space, 0
+				.endif
+
+				;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
+				.if keys.n4!=0
+					mov _blackScreeningRemain, 300
+					mov keys.n4, 0
+				.endif
+
+				.if keys.n5!=0
+					mov _bombPicRemain, 100
+					invoke _Bomb
+					mov keys.n5, 0
+				.endif
+
+				.if keys.n6!=0
+					mov _specialBlockRemain, 3
+					invoke _GetNextBlock
+					mov keys.n6, 0
+				.endif
+				;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
+			.else
+				.if keys.space != 0
+					mov _paused, 0
+					mov keys.space, 0
+				.endif
 			.endif
-			;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
 
 		.elseif _page == MULTIPLE_GAME_PAGE
 

@@ -399,6 +399,7 @@ _InitSingleGame proc
 	mov _blackScreeningRemain, 0
 	mov _bombPicRemain, 0
 	mov _specialBlockRemain, 0
+	mov _paused, 0
 
 	pop eax
 	ret
@@ -523,6 +524,8 @@ _bombPicRemain dword 0
 _specialBlockRemain dword 0
 
 _bombProb EQU 20
+
+_paused dword 0
 
 .code
 
