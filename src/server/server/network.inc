@@ -56,7 +56,7 @@ _playerMsgs		Client		MAX_PLAYERS dup(<>)
 _sockets		dword		MAX_PLAYERS dup(0) 
 _playerAlive	dword		MAX_PLAYERS dup(0)
 _readyPlayers	dword		0;这个还没加到清缓存的部分中
-_gameBoard		byte		160 dup(0) 
+_gameBoard		byte		800 dup(0) 
 		.const
 typeNetworkMsg dword type NetworkMsg
 testString  db  5, 'abcde', 3, 20, 30, 40, 4, '1234' 
