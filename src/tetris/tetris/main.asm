@@ -773,7 +773,7 @@ _DrawIpAddress	proc _hDC
 		invoke	InvertRect,@hDcText,addr @textRgn;把背景设为全白
 
 		invoke  TextOutA, @hDcText, 0, 0, addr _ipStr, _ipLen;在DC上写文字
-		invoke	TransparentBlt,_hDC,495,360,495+800,360+400,\
+		invoke	TransparentBlt,_hDC,495,360,800,400,\
 		@hDcText,0,0,800,400,0FFFFFFh;过滤白色，只把文字图层的黑色(文字)贴到hDC上
 		invoke	DeleteObject, @textBmp
 		invoke	DeleteDC, @hDcText
@@ -880,8 +880,7 @@ _OnPaint	proc	_hWnd,_hDC
 
 		.if (_page == SINGLE_GAME_PAGE)
 			.if _paused==1
-				; TODO: 暂停贴图
-				invoke _DrawBlackScreen, @bufferDC
+				invoke _DrawPause, @bufferDC
 			.endif
 		.endif
 
