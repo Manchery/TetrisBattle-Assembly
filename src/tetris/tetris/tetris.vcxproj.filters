@@ -60,6 +60,12 @@
     <Image Include="resources\bgReady.bmp">
       <Filter>资源文件</Filter>
     </Image>
+    <Image Include="resources\bgConnectError.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="resources\bgWaitConnect.bmp">
+      <Filter>资源文件</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="network.inc">

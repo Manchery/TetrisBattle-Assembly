@@ -798,7 +798,7 @@ _OnPaint	proc	_hWnd,_hDC
 			invoke _DrawIpAddress, @bufferDC
 		.endif
 
-		.if _page == SINGLE_GAME_PAGE
+		.if (_page == SINGLE_GAME_PAGE) || (_page == MULTIPLE_GAME_PAGE)
 			;********************************************************************
 			; 画地图
 			;********************************************************************
@@ -815,7 +815,9 @@ _OnPaint	proc	_hWnd,_hDC
 				inc @i
 			.endw
 
+			;********************************************************************
 			; 当前块
+			;********************************************************************
 			.if _currentBlock != -1
 				mov eax, _currentBlock
 				mov ecx, 4
@@ -838,7 +840,9 @@ _OnPaint	proc	_hWnd,_hDC
 				.endw
 			.endif
 
+			;********************************************************************
 			; 下一块
+			;********************************************************************
 			.if _nextBlock != -1
 				mov eax, _nextBlock
 				mov ecx, 4
@@ -860,49 +864,15 @@ _OnPaint	proc	_hWnd,_hDC
 					inc @i
 				.endw
 			.endif
-
-
 		.endif
 
-;********************************************************************
-; 画时钟圆周上的点
-;********************************************************************
-		;invoke	GetStockObject,WHITE_BRUSH
-		;invoke	SelectObject,@bufferDC,eax
-		;invoke	_DrawDot,@bufferDC,360/12,3	;画12个大圆点
-		;invoke	_DrawDot,@bufferDC,360/60,1	;画60个小圆点
-;********************************************************************
-; 画时钟指针
-;********************************************************************
-		;invoke	CreatePen,PS_SOLID,1,0FFFFFFh
-		;invoke	SelectObject,@bufferDC,eax
-		;invoke	DeleteObject,eax
-		;movzx	eax,@stTime.wSecond
-		;mov	ecx,360/60
-		;mul	ecx			;秒针度数 = 秒 * 360/60
-		;invoke	_DrawLine,@bufferDC,eax,15
-;********************************************************************
-		;invoke	CreatePen,PS_SOLID,2,0FFFFFFh
-		;invoke	SelectObject,@bufferDC,eax
-		;invoke	DeleteObject,eax
-		;movzx	eax,@stTime.wMinute
-		;mov	ecx,360/60
-		;mul	ecx			;分针度数 = 分 * 360/60
-		;invoke	_DrawLine,@bufferDC,eax,20
-;********************************************************************
-		;invoke	CreatePen,PS_SOLID,3,0FFFFFFh
-		;invoke	SelectObject,@bufferDC,eax
-		;invoke	DeleteObject,eax
-		;movzx	eax,@stTime.wHour
-		;.if	eax >=	12
-		;	sub	eax,12
-		;.endif
-		;mov	ecx,360/12
-		;mul	ecx
-		;movzx	ecx,@stTime.wMinute
-		;shr	ecx,1
-		;add	eax,ecx
-		;invoke	_DrawLine,@bufferDC,eax,30
+		.if (_page == SINGLE_GAME_PAGE)
+			.if _blackScreeningRemain
+				;invoke _DrawBlackScreen, @bufferDC
+				dec _blackScreeningRemain
+			.endif
+		.endif
+
 ;********************************************************************
 ;		把缓存绘制到hDC上
 ;********************************************************************
@@ -1225,6 +1195,18 @@ _ComputeGameLogic	proc  _hWnd
 				.endif
 				mov keys.n3, 0
 			.endif
+
+			;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
+			.if keys.n4!=0
+				mov _blackScreeningRemain, 200
+				mov keys.n4, 0
+			.endif
+
+			.if keys.n5!=0
+				invoke _Bomb
+				mov keys.n5, 0
+			.endif
+			;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
 
 		.elseif _page == MULTIPLE_GAME_PAGE
 

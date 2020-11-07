@@ -1,27 +1,21 @@
 
 .data
 _random_seed dword 0
-_random_a1 dword 1812433253
-_random_a0 dword 1812433253
+_random_a1 dword 1664525
+_random_a0 dword 1013904223
 
 .code
 
 _GetRandomIndex proc _maxValue: BYTE
-    local performanceCount : QWORD
-    
     push ebx
     push edx
-
-    invoke QueryPerformanceCounter, ADDR performanceCount
-    mov ebx, DWORD PTR performanceCount
     
-    ;mov eax, _random_seed
-    ;mov ebx, _random_a1
-    ;mul eax
-    ;add eax, _random_a0
-    ;mov _random_seed, eax
-
-    ;mov ebx, _random_seed
+    mov eax, _random_seed
+    mov ebx, _random_a1
+    mul ebx
+    add eax, _random_a0
+    mov _random_seed, eax
+    mov ebx, _random_seed
 
     mov ax, bx
     mov ah,0 

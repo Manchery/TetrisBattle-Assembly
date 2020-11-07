@@ -139,6 +139,21 @@ _DrawSquare proc _hDC, _i, _j, _color, _offsetX, _offsetY
 	ret
 _DrawSquare endp
 
+_DrawBlackScreen proc _hDC
+	local @hDcBlackScreen
+	pushad
+
+	invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
+	mov		@hDcBlackScreen, eax
+	invoke	SelectObject, @hDcBlackScreen, _square
+
+	invoke	BitBlt,_hDC, 0, 0, _blockSideLength, _blockSideLength, @hDcBlackScreen, 0, 0, SRCCOPY
+
+	invoke	DeleteDC, @hDcBlackScreen
+	popad
+	ret
+_DrawBlackScreen endp
+
 ; 判断某一形状的某一状态在某一位置是否合法，就是有没有跟别的重叠
 _PositionValid proc _block, @status, _posI, _posJ
 	local	@i
@@ -488,3 +503,31 @@ _UpdateMoveDownInternal proc
 	.endif
 	ret
 _UpdateMoveDownInternal endp
+
+.data 
+
+_blackScreeningRemain dword 0
+
+_bombProb EQU 20
+
+.code
+
+_Bomb proc
+	local @i
+	pushad
+	
+	mov @i, 0 
+	.while @i<200
+		mov esi, @i
+		.if _map[esi*4]!=0
+			invoke _GetRandomIndex, 100
+			.if eax < _bombProb
+				mov _map[esi*4], 0
+			.endif
+		.endif
+		inc @i
+	.endw
+
+	popad
+	ret
+_Bomb endp
