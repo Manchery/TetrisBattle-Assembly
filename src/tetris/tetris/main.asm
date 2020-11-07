@@ -23,6 +23,8 @@ include		kernel32.inc
 includelib	kernel32.lib
 include		Gdi32.inc
 includelib	Gdi32.lib
+include		Msimg32.inc
+includelib	Msimg32.lib
 include		wsock32.inc
 includelib	wsock32.lib
 
@@ -90,15 +92,18 @@ KeyState	ends
 keys		KeyState	<>
 _page		dword	0
 _ipLen		dword	0
-_ipStr		db		?
+_ipStr		db		20 dup(0)
 hInstance	dd		?
 hWinMain	dd		?
 dwCenterX	dd		?	;圆心X
 dwCenterY	dd		?	;圆心Y
 dwRadius	dd		?	;半径
 
+_fontNameW	db	64	dup(0)
+
 		.const
 szClassName	db	'Tetris: the game',0
+_fontName	db	"Arial", 0
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 代码段
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -494,7 +499,7 @@ _DrawLine	proc	_hDC,_dwDegree,_dwRadiusAdjust
 _DrawLine	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _DrawCustomizedBackground	proc _hDC
-		local @dcBack, @hDcBack ; 'Back' for 'background'. 
+		local @hDcBack; 'Back' for 'background'. 
 		;todo demo How to index an array.
 		;mov		eax,	1
 		;mov		ecx,	type NetworkMsg
@@ -508,11 +513,6 @@ _DrawCustomizedBackground	proc _hDC
 			invoke	SelectObject, @hDcBack, _bg2
 		.elseif _page == 2
 			invoke	SelectObject, @hDcBack, _bg3
-			;invoke	CreateCompatibleDC,@hDcBack
-			;mov		@dcBack, eax
-			;invoke	SelectObject, @dcBack, _bg3
-			;invoke	BitBlt,@hDcBack,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @dcBack,0,0,SRCCOPY
-			invoke TextOutA, @hDcBack, 500, 380, addr _ipStr, _ipLen
 		.elseif _page == 3
 			invoke	SelectObject, @hDcBack, _bg4
 		.elseif _page == 4
@@ -527,7 +527,6 @@ _DrawCustomizedBackground	proc _hDC
 		invoke	DeleteDC, @hDcBack ;回收资源（DC）
 		; For your ref:我应该使用DeleteDC还是ReleaseDC?
 		; https://www.cnblogs.com/vranger/p/3564606.html
-		invoke	DeleteDC, @dcBack
 		; Todo: 没有自动补全怎么破...
 		ret
 _DrawCustomizedBackground	endp
@@ -722,6 +721,43 @@ _InitGame	proc  _hWnd
 _InitGame	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
+_DrawIpAddress	proc _hDC
+				local @textBmp, @hDcText, @font, @textRgn:RECT
+		pushad
+		invoke	CreateCompatibleDC,_hDC;创建文字图层DC
+		mov		@hDcText, eax
+
+		;Parameters of CreateFont:
+		;https://docs.microsoft.com/en-us/cpp/mfc/reference/cfont-class?view=msvc-160#createfont
+		
+		invoke	MultiByteToWideChar, CP_UTF8, 0, offset _fontName, -1, offset _fontNameW, 64;
+
+		invoke	CreateFont, 20 , 12 , 0 , 0 , 600 , 0 , 0 , 0\
+				,OEM_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS\
+				,DEFAULT_QUALITY,DEFAULT_PITCH or FF_SCRIPT, offset _fontNameW
+		mov		@font, eax
+		invoke	SelectObject,@hDcText,eax;把指向字体的句柄放入设备环境
+
+
+		invoke	CreateCompatibleBitmap, _hDC, 800, 400;创建文字图层图片
+		mov		@textBmp, eax
+		invoke	SelectObject, @hDcText, @textBmp;绑定BMP和DC
+		mov		@textRgn.left, 0
+		mov		@textRgn.top, 0
+		mov		@textRgn.right, 800
+		mov		@textRgn.bottom, 400
+		invoke	InvertRect,@hDcText,addr @textRgn;把背景设为全白
+
+		invoke  TextOutA, @hDcText, 0, 0, addr _ipStr, _ipLen;在DC上写文字
+		invoke	TransparentBlt,_hDC,495,360,495+800,360+400,\
+		@hDcText,0,0,800,400,0FFFFFFh;过滤白色，只把文字图层的黑色(文字)贴到hDC上
+		invoke	DeleteObject, @textBmp
+		invoke	DeleteDC, @hDcText
+		popad
+		ret
+_DrawIpAddress endp
+
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _OnPaint	proc	_hWnd,_hDC
 		local	@stTime:SYSTEMTIME, @bufferDC; bufferDC is cache for pictures.
@@ -744,6 +780,11 @@ _OnPaint	proc	_hWnd,_hDC
 ; Customized 画一个自定义背景
 ;********************************************************************
 		invoke _DrawCustomizedBackground, @bufferDC
+
+		;Draw Ip Address text to _page2
+		.if _page == 2
+			invoke _DrawIpAddress, @bufferDC
+		.endif
 
 		.if _page == SINGLE_GAME_PAGE
 			;********************************************************************
@@ -930,11 +971,11 @@ _ComputeGameLogic	proc  _hWnd
 		; @@@@@@@@@@@@@@@@@@@@ 多人:准备连接 @@@@@@@@@@@@@@@@@@@@@
 		.elseif _page == MULTIPLE_CONNECT_PAGE
 			.if keys.return
+				mov keys.return, 0
 				invoke	RtlZeroMemory,addr serverIpAddr,sizeof serverIpAddr
 				invoke _CopyMemory,addr serverIpAddr,addr _ipStr,_ipLen
 				invoke _Connect, _hWnd
 				mov _page, MULTIPLE_READY_PAGE
-				mov keys.return, 0
 			.elseif keys.back
 				.if _ipLen > 0
 					dec _ipLen
