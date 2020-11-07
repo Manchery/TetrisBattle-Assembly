@@ -187,6 +187,56 @@ _DrawPause proc _hDC
 	ret
 _DrawPause endp
 
+.data
+_debug byte '1233', 0
+
+.code
+
+_DrawNumber	proc _hDC, _destX, _destY, _number, _fontH, _fontW
+		local @textBmp, @hDcText, @font, @textRgn:RECT
+		local @str, @len
+		pushad
+		invoke	CreateCompatibleDC,_hDC;创建文字图层DC
+		mov		@hDcText, eax
+
+		;Parameters of CreateFont:
+		;https://docs.microsoft.com/en-us/cpp/mfc/reference/cfont-class?view=msvc-160#createfont
+		
+		invoke	MultiByteToWideChar, CP_UTF8, 0, offset _fontName, -1, offset _fontNameW, 64;
+
+		invoke	CreateFont, _fontH , _fontW , 0 , 0 , 1000 , 0 , 0 , 0\
+				,OEM_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS\
+				,DEFAULT_QUALITY,DEFAULT_PITCH or FF_SCRIPT, ADDR _fontNameW
+		mov		@font, eax
+		invoke	SelectObject,@hDcText,eax;把指向字体的句柄放入设备环境
+
+
+		invoke	CreateCompatibleBitmap, _hDC, 800, 400;创建文字图层图片
+		mov		@textBmp, eax
+		invoke	SelectObject, @hDcText, @textBmp;绑定BMP和DC
+		mov		@textRgn.left, 0
+		mov		@textRgn.top, 0
+		mov		@textRgn.right, 800
+		mov		@textRgn.bottom, 400
+		invoke	InvertRect,@hDcText,addr @textRgn;把背景设为全白
+
+		invoke NumbToStr, _number, OFFSET _NumbToStrBuff
+		mov @str, eax
+		mov @len, OFFSET _NumbToStrBuff
+		add @len, 10
+		sub @len, eax
+		inc @len
+
+		invoke  TextOutA, @hDcText, 0, 0, @str, @len ;在DC上写文字
+		invoke	TransparentBlt,_hDC,_destX,_destY,800,400,\
+		@hDcText,0,0,800,400,0FFFFFFh;过滤白色，只把文字图层的黑色(文字)贴到hDC上
+		invoke	DeleteObject, @textBmp
+		invoke	DeleteDC, @hDcText
+		invoke	DeleteObject, @font
+		popad
+		ret
+_DrawNumber endp
+
 _DrawBombPic proc _hDC
 	local @hDcBombPic
 	pushad
@@ -552,7 +602,7 @@ _Bomb proc
 	.while @i<200
 		mov esi, @i
 		.if _map[esi*4]!=0
-			invoke _GetRandomIndex, 100
+			invoke _GetPseudoRandomIndex, 100
 			.if eax < _bombProb
 				mov _map[esi*4], 0
 			.endif
