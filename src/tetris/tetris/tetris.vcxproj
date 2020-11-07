@@ -149,7 +149,10 @@
     <Image Include="resources\bgConnectError.bmp" />
     <Image Include="resources\bgReady.bmp" />
     <Image Include="resources\bgWait.bmp" />
+    <Image Include="resources\bgWaitCon.bmp" />
     <Image Include="resources\bgWaitConnect.bmp" />
+    <Image Include="resources\boomPic.bmp" />
+    <Image Include="resources\laugh.bmp" />
     <Image Include="resources\square.bmp" />
     <Image Include="resources\stop.bmp" />
     <Image Include="resources\test.bmp" />

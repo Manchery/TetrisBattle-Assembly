@@ -15,3 +15,5 @@ _stop			dword	0
 _square			dword	0
 _bgWaitConnect	dword	0
 _bgConnectErr	dword	0
+_laugh			dword	0
+_boomPic		dword	0
