@@ -41,24 +41,28 @@ TIMER_MAIN_INTERVAL		equ		10;ms
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; TODO 如果添加了新资源标识符，请从resource.h将其*复制*到此处。
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-IDB_BITMAP_TEST         equ	    101
-IDB_BITMAP_BG1			equ		104
-IDB_BITMAP_BG2          equ     105
-IDB_BITMAP_BG3          equ     123
-IDB_BITMAP_BG4          equ     106
-IDB_BITMAP_BG5          equ     127
-IDB_BITMAP_BGWAIT       equ     128
-IDB_BITMAP_STOP         equ     129
-IDB_BITMAP_SQUARE       equ     130
-IDB_BITMAP_BGREADY      equ     131
+IDB_BITMAP_TEST				equ	    101
+IDB_BITMAP_BG1				equ		104
+IDB_BITMAP_BG2				equ     105
+IDB_BITMAP_BG3				equ     123
+IDB_BITMAP_BG4				equ     106
+IDB_BITMAP_BG5				equ     127
+IDB_BITMAP_BGWAIT			equ     128
+IDB_BITMAP_STOP				equ     129
+IDB_BITMAP_SQUARE			equ     130
+IDB_BITMAP_BGREADY			equ     131
+IDB_BITMAP_BGERROR			equ     132
+IDB_BITMAP_BGWAITCON		equ     133
 
-HOME_SINGLE_PAGE		equ		0
-HOME_MULTIPLE_PAGE		equ		1
-MULTIPLE_CONNECT_PAGE	equ		2
-SINGLE_GAME_PAGE		equ		3
-MULTIPLE_GAME_PAGE		equ		4
-MULTIPLE_READY_PAGE		equ		5
-MULTIPLE_WAIT_PAGE		equ		6
+HOME_SINGLE_PAGE			equ		0
+HOME_MULTIPLE_PAGE			equ		1
+MULTIPLE_CONNECT_PAGE		equ		2
+SINGLE_GAME_PAGE			equ		3
+MULTIPLE_GAME_PAGE			equ		4
+MULTIPLE_READY_PAGE			equ		5
+MULTIPLE_WAIT_PAGE			equ		6
+MULTIPLE_WAIT_CONNECT_PAGE	equ		7
+MULTIPLE_CONNECT_ERROR_PAGE	equ		8
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 数据段
@@ -507,20 +511,24 @@ _DrawCustomizedBackground	proc _hDC
 		;mov		inputQueue.msgs[eax].sender, 233
 		invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
 		mov		@hDcBack, eax
-		.if	_page == 0
+		.if	_page == HOME_SINGLE_PAGE
 			invoke	SelectObject, @hDcBack, _bg1; 将图片绑定到DC，这样，图片才能被操作
-		.elseif _page ==1
+		.elseif _page == HOME_MULTIPLE_PAGE
 			invoke	SelectObject, @hDcBack, _bg2
-		.elseif _page == 2
+		.elseif _page == MULTIPLE_CONNECT_PAGE
 			invoke	SelectObject, @hDcBack, _bg3
-		.elseif _page == 3
+		.elseif _page == SINGLE_GAME_PAGE
 			invoke	SelectObject, @hDcBack, _bg4
-		.elseif _page == 4
+		.elseif _page == MULTIPLE_GAME_PAGE
 			invoke	SelectObject, @hDcBack, _bg5
-		.elseif _page == 5
+		.elseif _page == MULTIPLE_READY_PAGE
 			invoke	SelectObject, @hDcBack, _bgready
-		.elseif _page == 6
+		.elseif _page == MULTIPLE_WAIT_PAGE
 			invoke	SelectObject, @hDcBack, _bgwait
+		.elseif _page == MULTIPLE_WAIT_CONNECT_PAGE
+			invoke	SelectObject, @hDcBack, _bgWaitConnect
+		.elseif _page == MULTIPLE_CONNECT_ERROR_PAGE
+			invoke	SelectObject, @hDcBack, _bgConnectErr
 		.endif
 		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @hDcBack,0,0,SRCCOPY ; 通过DC读取图片，复制到hDC，从而完成显示
 
@@ -714,6 +722,10 @@ _InitGame	proc  _hWnd
 		mov		_stop, eax		
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_SQUARE
 		mov		_square, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BGERROR
+		mov		_bgConnectErr, eax		
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BGWAITCON
+		mov		_bgWaitConnect, eax	
 		;TODO 如果你们愿意的话，可以考虑把所有背景相关的变量搞个结构体
 		;但其实意义不大，因为我的VS没有自动补全
 
@@ -976,7 +988,7 @@ _ComputeGameLogic	proc  _hWnd
 				invoke	RtlZeroMemory,addr serverIpAddr,sizeof serverIpAddr
 				invoke _CopyMemory,addr serverIpAddr,addr _ipStr,_ipLen
 				invoke _Connect, _hWnd
-				mov _page, MULTIPLE_READY_PAGE
+				mov _page, MULTIPLE_WAIT_CONNECT_PAGE
 			.elseif keys.back
 				.if _ipLen > 0
 					dec _ipLen
@@ -1060,6 +1072,13 @@ _ComputeGameLogic	proc  _hWnd
 				.endif
 				mov keys.point, 0
 			.endif 
+		; @@@@@@@@@@@@@@@@@@@@ 多人:准备开始游戏 @@@@@@@@@@@@@@@@@@@@@
+		.elseif _page == MULTIPLE_READY_PAGE
+			.if keys.return
+				mov keys.return, 0
+				;to do 发送准备好了的消息
+				mov _page, MULTIPLE_WAIT_PAGE
+			.endif
 		; @@@@@@@@@@@@@@@@@@@@ 单人: 游戏 @@@@@@@@@@@@@@@@@@@@@
 		.elseif _page == SINGLE_GAME_PAGE
 			inc _sinceLastMoveDown

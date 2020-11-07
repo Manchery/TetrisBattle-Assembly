@@ -22,13 +22,13 @@
     <VCProjectVersion>16.0</VCProjectVersion>
     <ProjectGuid>{99E245D6-8023-4749-81D2-F873B7357D8D}</ProjectGuid>
     <RootNamespace>tetris</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
@@ -146,8 +146,10 @@
     <Image Include="resources\bg3.bmp" />
     <Image Include="resources\bg4.bmp" />
     <Image Include="resources\bg5.bmp" />
+    <Image Include="resources\bgConnectError.bmp" />
     <Image Include="resources\bgReady.bmp" />
     <Image Include="resources\bgWait.bmp" />
+    <Image Include="resources\bgWaitConnect.bmp" />
     <Image Include="resources\square.bmp" />
     <Image Include="resources\stop.bmp" />
     <Image Include="resources\test.bmp" />
