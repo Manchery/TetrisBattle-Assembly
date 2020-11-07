@@ -187,6 +187,21 @@ _DrawPause proc _hDC
 	ret
 _DrawPause endp
 
+_DrawGameOverSingle proc _hDC
+	local @hDcPause
+	pushad
+
+	invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
+	mov		@hDcPause, eax
+	invoke	SelectObject, @hDcPause, _singleOverBox
+
+	invoke	BitBlt, _hDC, 271, 226, 712, 371 , @hDcPause, 0, 0, SRCCOPY
+	
+	invoke	DeleteDC, @hDcPause
+	popad
+	ret
+_DrawGameOverSingle endp
+
 .data
 _debug byte '1233', 0
 
@@ -465,6 +480,7 @@ _InitSingleGame proc
 	mov _bombPicRemain, 0
 	mov _specialBlockRemain, 0
 	mov _paused, 0
+	mov _gameover, 0
 
 	pop eax
 	ret
@@ -591,6 +607,7 @@ _specialBlockRemain dword 0
 _bombProb EQU 20
 
 _paused dword 0
+_gameover dword 0
 
 .code
 
