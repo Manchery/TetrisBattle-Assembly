@@ -153,6 +153,8 @@
     <Image Include="resources\bgWaitConnect.bmp" />
     <Image Include="resources\boomPic.bmp" />
     <Image Include="resources\laugh.bmp" />
+    <Image Include="resources\mulGameover.bmp" />
+    <Image Include="resources\singleGameover.bmp" />
     <Image Include="resources\square.bmp" />
     <Image Include="resources\stop.bmp" />
     <Image Include="resources\test.bmp" />

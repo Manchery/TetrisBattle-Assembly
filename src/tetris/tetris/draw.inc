@@ -17,3 +17,5 @@ _bgWaitConnect	dword	0
 _bgConnectErr	dword	0
 _laugh			dword	0
 _boomPic		dword	0
+_mulOverBox		dword	0
+_singleOverBox	dword	0
