@@ -838,9 +838,11 @@ _OnRecevingMsg proc
 
 			;先判断发消息的用户是否已死亡或断开连接
 			;无视已死亡或断开连接用户发来的消息
+
+			;先判断是否已断开连接
 			mov eax, @receivedMsg.sender
-			.if (dword ptr _sockets[4 * eax] == 0) \
-				|| (dword ptr _playerAlive[4 * eax] == 0)
+			dec eax
+			.if dword ptr _sockets[4 * eax] == 0
 				.continue
 			.endif
 			
@@ -857,13 +859,22 @@ _OnRecevingMsg proc
 					mov @sentMsg.inst, 2
 					mov @sentMsg.sender, 0
 					mov @sentMsg.recver, 0
+					mov @sentMsg.msglen, 0
 					mov eax, _players
 					mov byte ptr @sentMsg.msg[0], al
-					invoke _SendMsgTo, 0, _players
+					invoke _SendMsgTo, 0, addr @sentMsg
 				.endif
 			.else
 				;default choice for missing all branches.
 
+			.endif
+
+
+			;再判断是否已断开连接
+			mov eax, @receivedMsg.sender
+			dec eax
+			.if dword ptr _playerAlive[4 * eax] == 0
+				.continue
 			.endif
 		.endw
 		ret

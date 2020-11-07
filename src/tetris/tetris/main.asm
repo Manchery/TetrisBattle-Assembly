@@ -1101,6 +1101,7 @@ _ComputeGameLogic	proc  _hWnd
 				mov eax, _playerNum
 				mov @sendMsg.sender, eax
 				mov @sendMsg.recver, 0
+				mov @sendMsg.msglen, 0
 				invoke _QueuePush, offset outputQueue, addr @sendMsg
 				invoke _SendData
 				;to do 发送准备好了的消息
