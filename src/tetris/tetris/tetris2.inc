@@ -172,6 +172,21 @@ _DrawBlackScreen proc _hDC
 	ret
 _DrawBlackScreen endp
 
+_DrawPause proc _hDC
+	local @hDcPause
+	pushad
+
+	invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
+	mov		@hDcPause, eax
+	invoke	SelectObject, @hDcPause, _stop
+
+	invoke	BitBlt, _hDC, 271, 226, 712, 371 , @hDcPause, 0, 0, SRCCOPY
+	
+	invoke	DeleteDC, @hDcPause
+	popad
+	ret
+_DrawPause endp
+
 _DrawBombPic proc _hDC
 	local @hDcBombPic
 	pushad
