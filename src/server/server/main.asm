@@ -802,13 +802,13 @@ _OnPaint	proc	_hWnd,_hDC
 _OnPaint	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_ProcessClientMsg	proc  _hWnd
+_OnSendingMsg	proc  _hWnd
 		local @testNetworkMsg:NetworkMsg
-		;TODO 在这里写服务器的逻辑
+		;TODO 在这里写服务器的发送事件的逻辑
 
 		
 		ret
-_ProcessClientMsg	endp
+_OnSendingMsg	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -817,7 +817,7 @@ _ProcessTimer	proc  _hWnd, timerId
 		;如，当前的定时器可能是UpdateFrame计时器，
 		;此时我们就计算当前的状态，并修改对应的状态。
 		.if timerId == ID_TIMER
-			invoke	_ProcessClientMsg, _hWnd
+			invoke	_OnSendingMsg, _hWnd
 			invoke	InvalidateRect,_hWnd,NULL,FALSE
 		.else
 			;TODO 在此处添加其它的计时器
@@ -826,6 +826,50 @@ _ProcessTimer	proc  _hWnd, timerId
 		ret
 _ProcessTimer	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 响应接收到事件时的操作
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_OnRecevingMsg proc 
+		local @receivedMsg:NetworkMsg, @sentMsg:NetworkMsg
+		.while inputQueue.len != 0
+			;提取消息
+			invoke _QueuePop, offset inputQueue, addr @receivedMsg
+
+			;先判断发消息的用户是否已死亡或断开连接
+			;无视已死亡或断开连接用户发来的消息
+			mov eax, @receivedMsg.sender
+			.if (dword ptr _sockets[4 * eax] == 0) \
+				|| (dword ptr _playerAlive[4 * eax] == 0)
+				.continue
+			.endif
+			
+			;解析信息，并做出合适的响应(响应不必总是要发回消息)
+			.if (@receivedMsg.inst == 1) && (_onPlaying == 0)
+				;玩家准备开始指令
+				mov eax, @receivedMsg.sender
+				mov dword ptr _playerAlive[4 * eax], 1
+				inc _readyPlayers
+				mov eax, _players
+				.if eax == _readyPlayers
+					;所有玩家都已经准备好，游戏开始
+					mov _onPlaying, 1
+					mov @sentMsg.inst, 2
+					mov @sentMsg.sender, 0
+					mov @sentMsg.recver, 0
+					mov eax, _players
+					mov byte ptr @sentMsg.msg[0], al
+					invoke _SendMsgTo, 0, _players
+				.endif
+			.else
+				;default choice for missing all branches.
+
+			.endif
+		.endw
+		ret
+_OnRecevingMsg endp
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
 
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -840,10 +884,12 @@ _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam
 			mov	eax,lParam
 			.if	ax ==	FD_READ
 				invoke	_RecvData, wParam
+				invoke	_OnRecevingMsg
 			.elseif	ax ==	FD_WRITE
 				invoke	_SendData, wParam	;继续发送缓冲区数据
 			.elseif	ax ==	FD_CLOSE
 				invoke	_OnSocketClose, wParam
+				;todo: 当游戏过程中，连接的用户数量为0（或1）时，就考虑终止游戏
 			.elseif ax ==	FD_ACCEPT
 				invoke  _OnSocketAccept, hWnd
 			.endif

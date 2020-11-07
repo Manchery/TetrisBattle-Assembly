@@ -97,7 +97,9 @@ KeyState	ends
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 keys		KeyState	<>
 _page		dword	0
+_playerNum	dword	0
 _ipLen		dword	0
+_ifConnect	dword	0
 _ipStr		db		20 dup(0)
 hInstance	dd		?
 hWinMain	dd		?
@@ -153,7 +155,8 @@ _Connect	proc _hWnd
 		invoke	RtlZeroMemory,addr @stSin,sizeof @stSin
 		invoke	inet_addr,offset serverIpAddr
 		.if	eax ==	INADDR_NONE
-			invoke	MessageBox,_hWnd,addr szErrIP,NULL,MB_OK or MB_ICONSTOP
+			;invoke	MessageBox,_hWnd,addr szErrIP,NULL,MB_OK or MB_ICONSTOP
+			;mov _page, MULTIPLE_CONNECT_ERROR_PAGE
 			jmp	_Err
 		.endif
 		mov	@stSin.sin_addr,eax
@@ -175,8 +178,10 @@ _Connect	proc _hWnd
 				jmp	_Err
 			.endif
 		.endif
+		mov _ifConnect, 1
 		ret
 _Err:
+		mov _ifConnect, 0
 		invoke	_Disconnect
 		ret
 _Connect	endp
@@ -915,7 +920,7 @@ _OnPaint	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ComputeGameLogic	proc  _hWnd
-		;local @testNetworkMsg:NetworkMsg
+		local @receivedMsg:NetworkMsg, @sendMsg:NetworkMsg
 		;TODO 在这里写游戏的逻辑
 
 		;下面是(离线)测试网络相关API的函数
@@ -984,7 +989,15 @@ _ComputeGameLogic	proc  _hWnd
 				invoke	RtlZeroMemory,addr serverIpAddr,sizeof serverIpAddr
 				invoke _CopyMemory,addr serverIpAddr,addr _ipStr,_ipLen
 				invoke _Connect, _hWnd
-				mov _page, MULTIPLE_WAIT_CONNECT_PAGE
+				.if _ifConnect == 1
+					mov _page, MULTIPLE_WAIT_CONNECT_PAGE
+				.else
+					mov _page, MULTIPLE_CONNECT_ERROR_PAGE
+					mov _ipLen,0
+				.endif
+			.elseif keys.escape
+				mov keys.escape, 0
+				mov _page, HOME_MULTIPLE_PAGE
 			.elseif keys.back
 				.if _ipLen > 0
 					dec _ipLen
@@ -1068,12 +1081,42 @@ _ComputeGameLogic	proc  _hWnd
 				.endif
 				mov keys.point, 0
 			.endif 
+		; @@@@@@@@@@@@@@@@@@@@ 多人:等待连接 @@@@@@@@@@@@@@@@@@@@@
+		.elseif _page == MULTIPLE_WAIT_CONNECT_PAGE
+			.if inputQueue.len != 0
+				invoke _QueuePop, offset inputQueue, addr @receivedMsg
+				.if @receivedMsg.inst == 0
+					.if @receivedMsg.sender == 0
+						mov eax, @receivedMsg.recver
+						mov _playerNum, eax
+						mov _page, MULTIPLE_READY_PAGE
+					.endif
+				.endif
+			.elseif keys.escape
+				mov keys.escape, 0
+				invoke closesocket,hSocket
+				mov _ipLen,0
+				mov _page, HOME_MULTIPLE_PAGE
+			.endif
+			;todo wait connect
 		; @@@@@@@@@@@@@@@@@@@@ 多人:准备开始游戏 @@@@@@@@@@@@@@@@@@@@@
 		.elseif _page == MULTIPLE_READY_PAGE
 			.if keys.return
 				mov keys.return, 0
+				mov @sendMsg.inst, 1
+				mov eax, _playerNum
+				mov @sendMsg.sender, eax
+				mov @sendMsg.recver, 0
+				invoke _QueuePush, offset outputQueue, addr @sendMsg
+				invoke _SendData
 				;to do 发送准备好了的消息
 				mov _page, MULTIPLE_WAIT_PAGE
+			.endif
+		; @@@@@@@@@@@@@@@@@@@@ 多人:连接错误 @@@@@@@@@@@@@@@@@@@@@
+		.elseif _page == MULTIPLE_CONNECT_ERROR_PAGE
+			.if keys.return
+				mov keys.return, 0
+				mov _page, HOME_MULTIPLE_PAGE
 			.endif
 		; @@@@@@@@@@@@@@@@@@@@ 单人: 游戏 @@@@@@@@@@@@@@@@@@@@@
 		.elseif _page == SINGLE_GAME_PAGE

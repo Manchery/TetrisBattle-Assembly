@@ -53,9 +53,10 @@ _playerMsgs		Client		MAX_PLAYERS dup(<>)
 ;_sockets可同时用来判断连接状态
 ;如果_sockets == 0，就代表已断开连接
 ;因此，总是需要及时清空_sockets.
-_sockets		dword		0 dup(MAX_PLAYERS) 
-_playerAlive	dword		0 dup(MAX_PLAYERS)
-
+_sockets		dword		MAX_PLAYERS dup(0) 
+_playerAlive	dword		MAX_PLAYERS dup(0)
+_readyPlayers	dword		0;这个还没加到清缓存的部分中
+_gameBoard		byte		160 dup(0) 
 		.const
 typeNetworkMsg dword type NetworkMsg
 testString  db  5, 'abcde', 3, 20, 30, 40, 4, '1234' 
