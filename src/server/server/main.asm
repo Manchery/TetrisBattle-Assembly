@@ -850,6 +850,7 @@ _OnRecevingMsg proc
 			.if (@receivedMsg.inst == 1) && (_onPlaying == 0)
 				;玩家准备开始指令
 				mov eax, @receivedMsg.sender
+				dec eax
 				mov dword ptr _playerAlive[4 * eax], 1
 				inc _readyPlayers
 				mov eax, _players

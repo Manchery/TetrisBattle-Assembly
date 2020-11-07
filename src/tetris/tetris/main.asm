@@ -103,7 +103,7 @@ _playerNum		dword		0
 _playerCount	dword		0
 _ipLen			dword		0
 _ifConnect		dword		0
-_ipStr			db			20 dup(0)
+_ipStr			db			'127.0.0.1', 20 dup(0)
 hInstance	dd		?
 hWinMain	dd		?
 dwCenterX	dd		?	;Ô²ÐÄX
