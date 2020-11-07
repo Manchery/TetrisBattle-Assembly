@@ -467,21 +467,21 @@ _GetNextBlock proc
 _GetNextBlock endp
 
 _UpdateMoveDownInternal proc
-	.if scores < 50
+	.if _scores < 50
 		mov _moveDownInternal, 50
-	.elseif scores < 100
+	.elseif _scores < 100
 		mov _moveDownInternal, 45
-	.elseif scores < 150
+	.elseif _scores < 150
 		mov _moveDownInternal, 40
-	.elseif scores < 200
+	.elseif _scores < 200
 		mov _moveDownInternal, 35
-	.elseif scores < 250
+	.elseif _scores < 250
 		mov _moveDownInternal, 30
-	.elseif scores < 300
+	.elseif _scores < 300
 		mov _moveDownInternal, 25
-	.elseif scores < 350
+	.elseif _scores < 350
 		mov _moveDownInternal, 20
-	.elseif scores < 400
+	.elseif _scores < 400
 		mov _moveDownInternal, 15
 	.else
 		mov _moveDownInternal, 10
