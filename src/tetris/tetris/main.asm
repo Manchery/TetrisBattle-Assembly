@@ -53,6 +53,8 @@ IDB_BITMAP_SQUARE			equ     130
 IDB_BITMAP_BGREADY			equ     131
 IDB_BITMAP_BGERROR			equ     132
 IDB_BITMAP_BGWAITCON		equ     133
+IDB_BITMAP_BOOMPIC          equ    134
+IDB_BITMAP_LAUGH            equ    137
 
 HOME_SINGLE_PAGE			equ		0
 HOME_MULTIPLE_PAGE			equ		1
@@ -726,6 +728,11 @@ _InitGame	proc  _hWnd
 		mov		_bgConnectErr, eax		
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_BGWAITCON
 		mov		_bgWaitConnect, eax	
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_LAUGH
+		mov		_laugh, eax	
+		invoke	LoadBitmap, hInstance, IDB_BITMAP_BOOMPIC
+		mov		_boomPic, eax	
+
 		;TODO 如果你们愿意的话，可以考虑把所有背景相关的变量搞个结构体
 		;但其实意义不大，因为我的VS没有自动补全
 
