@@ -157,6 +157,62 @@ _DrawSquare proc _hDC, _i, _j, _color, _offsetX, _offsetY
 	ret
 _DrawSquare endp
 
+.data
+_playerRemain dword 0
+.code
+
+_DrawOtherMap proc _hDC, @map, _offsetX, _offsetY, _sideLength
+	local @hDc
+	local @i, @j
+	pushad
+
+	invoke	CreateCompatibleDC, _hDC
+	mov		@hDc, eax
+
+	invoke	GetStockObject, WHITE_BRUSH
+	invoke	SelectObject, @hDc, eax
+	invoke	DeleteObject, eax
+
+	mov @i, 0
+	.while @i<20
+		mov @j, 0
+		.while @j<10
+			
+			mov eax, @i
+			mov ecx, 20
+			mul ecx
+			add eax, @j
+
+			.if @map[eax]!=0
+				
+				mov eax, @i
+				mov ecx, _sideLength
+				mul ecx
+				mov ebx, eax
+				add ebx, _offsetY
+				mov eax, @j
+				mul ecx
+				add eax, _offsetX
+				mov ecx, eax
+				add ecx, _sideLength
+				mov edx, ebx
+				add edx, _sideLength
+
+				invoke	Rectangle, @hDc, eax, ebx, ecx, edx
+			.endif
+
+			inc @j
+		.endw
+		inc @i
+	.endw
+
+	invoke	DeleteDC, @hDc
+	popad
+	ret
+_DrawOtherMap endp
+
+
+
 _DrawBlackScreen proc _hDC
 	local @hDcBlackScreen
 	pushad
@@ -186,6 +242,21 @@ _DrawPause proc _hDC
 	popad
 	ret
 _DrawPause endp
+
+_DrawGameOverSingle proc _hDC
+	local @hDcPause
+	pushad
+
+	invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
+	mov		@hDcPause, eax
+	invoke	SelectObject, @hDcPause, _singleOverBox
+
+	invoke	BitBlt, _hDC, 271, 226, 712, 371 , @hDcPause, 0, 0, SRCCOPY
+	
+	invoke	DeleteDC, @hDcPause
+	popad
+	ret
+_DrawGameOverSingle endp
 
 .data
 _debug byte '1233', 0
@@ -236,6 +307,22 @@ _DrawNumber	proc _hDC, _destX, _destY, _number, _fontH, _fontW
 		popad
 		ret
 _DrawNumber endp
+
+_DrawGameOverMultiple proc _hDC, _rank
+	local @hDcPause
+	pushad
+
+	invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
+	mov		@hDcPause, eax
+	invoke	SelectObject, @hDcPause, _mulOverBox
+
+	invoke	BitBlt, _hDC, 271, 226, 356, 186 , @hDcPause, 0, 0, SRCCOPY
+	invoke _DrawNumber, _hDC, 271, 226, _rank, 80, 36
+	
+	invoke	DeleteDC, @hDcPause
+	popad
+	ret
+_DrawGameOverMultiple endp
 
 _DrawBombPic proc _hDC
 	local @hDcBombPic
@@ -419,12 +506,17 @@ _scores dd 0					; 分数
 _slowingRemain dword 0				; 减慢剩余块数
 _slowingMoveDownInternal dword 0	; 减慢时的速度
 
+_sinceSendMap dd 0	
+_sendMapInternal dd 200
+
 _tools dword 0, 0, 1
+
+_othermap byte 800 dup(0)
 
 .code
 
-; 初始化一局担任游戏
-_InitSingleGame proc
+; 初始化一局游戏
+_InitGameStatus proc
 	local @i
 	push eax
 
@@ -432,6 +524,13 @@ _InitSingleGame proc
 	.while @i<200
 		mov eax, @i
 		mov _map[eax*4], 0
+		inc @i
+	.endw
+
+	mov @i, 0
+	.while @i<800
+		mov eax, @i
+		mov _othermap[eax], 0
 		inc @i
 	.endw
 
@@ -465,10 +564,16 @@ _InitSingleGame proc
 	mov _bombPicRemain, 0
 	mov _specialBlockRemain, 0
 	mov _paused, 0
+	mov _gameover, 0
+
+	mov _sinceSendMap, 0	
+	mov _sendMapInternal, 200
+
+	mov _playerRemain, 0
 
 	pop eax
 	ret
-_InitSingleGame endp
+_InitGameStatus endp
 
 ; 尝试消去满行
 ; _force：强制消掉底下若干行
@@ -591,6 +696,7 @@ _specialBlockRemain dword 0
 _bombProb EQU 20
 
 _paused dword 0
+_gameover dword 0
 
 .code
 

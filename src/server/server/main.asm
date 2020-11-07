@@ -14,6 +14,8 @@ includelib	Gdi32.lib
 include		wsock32.inc
 includelib	wsock32.lib
 include		network.inc
+include		utils.inc
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; Equ 等值定义
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -22,6 +24,7 @@ ID_TIMER				equ		1
 WINDOW_WIDTH			equ		300
 WINDOW_HEIGHT			equ		200
 TIMER_MAIN_INTERVAL		equ		10;ms
+SEND_LATENCY			equ		300;300 * 10ms = 3s
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 数据段
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -39,8 +42,9 @@ dwRadius	dd		?	;半径
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;	游戏状态
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-_onPlaying	dword	0;0 for notplay, 1 forplaying
-_players	dword	0;a count for players
+_onPlaying			dword	0;0 for notplay, 1 forplaying
+_players			dword	0;a count for players
+_sendFrequencyCnt	dword	0
 		.const
 szClassName	db	'Tetris Server',0
 szErrBind	db	'绑定到TCP端口10086时出错，请检查是否有其它程序在使用!',0
@@ -49,23 +53,20 @@ szErrBind	db	'绑定到TCP端口10086时出错，请检查是否有其它程序在使用!',0
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 		.code
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-; 断开连接
+; 重置
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_Disconnect	proc
+_Reset	proc
 		local @cnt:dword
 		pushad
 
 		;清理缓冲区和变量
 		mov inputQueue.len,		0
-		mov	_players, 0
+		mov	_players,			0
+		mov _readyPlayers,		0
+		mov _onPlaying,			0
+		mov _sendFrequencyCnt,	0
 
-		;断开监听套接字
-		.if	hListenSocket
-			invoke	closesocket,hListenSocket
-			xor	eax,eax
-			mov	hListenSocket,eax
-		.endif
-
+		;清理结构体等
 		mov esi, offset _sockets
 		mov edi, offset _playerMsgs
 		mov	@cnt, 0
@@ -82,6 +83,8 @@ _Disconnect	proc
 				mov (Client ptr [edi]).outputQueue.len, 0
 				xor	eax,eax
 				mov	[esi],eax
+				mov eax, @cnt
+				mov dword ptr _playerAlive[4 * eax], 0
 			.endif
 			add esi, 4
 			add edi, type Client
@@ -93,7 +96,28 @@ _Disconnect	proc
 		;invoke _ShowDisconnectScreen
 		popad
 		ret
+_Reset	endp
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 断开连接
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_Disconnect	proc
+		pushad
+
+		;断开监听套接字
+		.if	hListenSocket
+			invoke	closesocket,hListenSocket
+			xor	eax,eax
+			mov	hListenSocket,eax
+		.endif
+
+		;清理变量等
+		invoke _Reset
+
+		popad
+		ret
 _Disconnect	endp
+
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 连接到服务器
@@ -152,8 +176,7 @@ _OnSocketClose proc @closedSocket
 		.if(eax == hListenSocket)
 			;监听服务器已关闭
 			;关闭所有余下链接，终止服务器
-			;TODO:关闭所有余下链接
-			invoke closesocket, hListenSocket
+			invoke _Disconnect
 			invoke ExitProcess, 0
 		.endif
 		;用户连接已关闭
@@ -175,12 +198,16 @@ _OnSocketClose proc @closedSocket
 				mov (Client ptr [edi]).outputQueue.len, 0
 				xor	eax,eax
 				mov	[esi],eax
+				mov eax, @cnt
+				mov dword ptr _playerAlive[4 * eax], 0
 				.break
 			.endif
 			add esi, 4
 			add edi, type Client
 			inc @cnt
 		.endw
+
+
 		ret
 _OnSocketClose	endp
 
@@ -679,6 +706,84 @@ _SendMsgTo	proc @user, @msgAddr
 	ret
 _SendMsgTo	endp
 
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 从没有死亡的用户中选取一个，返回他的套接字(eax)和ID(0~3,ebx)
+; 如果不能找到这样一个用户，eax = 0.
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_SelectAlive	proc
+		local @i, @start, @selected, @socket
+		mov	eax, _players
+		invoke _GetRandomIndex, al
+		mov @i, eax
+		mov @start, eax
+		mov @selected, 0
+		mov @socket, 0
+		.while TRUE
+			mov eax, @i
+			.if (dword ptr _playerAlive[eax * 4] != 0) && \
+				(dword ptr _sockets[eax * 4] != 0)
+				;选中了所需用户
+				;保存用户ID
+				mov @selected, eax
+				;保存用户套接字
+				mov eax, dword ptr _sockets[eax * 4]
+				mov @socket, eax
+				.break 
+			.endif
+			mov eax, @i
+			inc eax
+			.if eax >= _players
+				sub eax, _players
+			.endif
+			mov @i, eax
+			.break .if eax == @start
+		.endw
+		mov eax, @socket
+		mov ebx, @selected
+		ret
+_SelectAlive	endp
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; 从没有断开连接的用户中选取一个，返回他的套接字(eax)和ID(0~3,ebx)
+; 如果不能找到这样一个用户，eax = 0.
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_SelectConnected	proc
+		local @i, @start, @selected, @socket
+		mov	eax, _players
+		invoke _GetRandomIndex, al
+		mov @i, eax
+		mov @start, eax
+		mov @selected, 0
+		mov @socket, 0
+		.while TRUE
+			mov eax, @i
+			.if (dword ptr _sockets[eax * 4] != 0)
+				;选中了所需用户
+				;保存用户ID
+				mov @selected, eax
+				;保存用户套接字
+				mov eax, dword ptr _sockets[eax * 4]
+				mov @socket, eax
+				.break 
+			.endif
+			mov eax, @i
+			inc eax
+			.if eax >= _players
+				sub eax, _players
+			.endif
+			mov @i, eax
+			.break .if eax == @start
+		.endw
+		mov eax, @socket
+		mov ebx, @selected
+		ret
+_SelectConnected	endp
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 响应连接到服务器的事件：一次一条
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -803,10 +908,70 @@ _OnPaint	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _OnSendingMsg	proc  _hWnd
-		local @testNetworkMsg:NetworkMsg
+		local @sentMsg:NetworkMsg
+		local @i, @flag, @status[4]:byte
+		.if _onPlaying == 0
+			ret
+		.endif
 		;TODO 在这里写服务器的发送事件的逻辑
-
+		;TODO 在这里判断游戏结束等内容，而不要在_OnSocketClose或_Reset中判断
 		
+		.if _sendFrequencyCnt == 0
+			;开始更新游戏状态
+			mov @flag, 0
+			mov @i, 0
+			invoke RtlZeroMemory, addr @status, 4
+			mov edx, _players
+			.while edx >= @i
+				mov eax, @i
+				mov ebx, dword ptr _sockets[eax * 4]
+				and ebx, dword ptr _playerAlive[eax * 4]
+				or	@flag, ebx
+				mov byte ptr @status[eax], bl
+				inc @i
+			.endw
+
+			;发送玩家状态
+			invoke RtlZeroMemory, addr @sentMsg, type NetworkMsg
+			mov @sentMsg.inst, 7
+			mov @sentMsg.msglen, 4
+			invoke _CopyMemory, addr @sentMsg.msg, addr @status, 4
+			invoke _SendMsgTo, 0, addr @sentMsg
+
+			;发送地图
+			mov @i, 0
+			mov edx, _players
+			.while edx >= @i
+				invoke RtlZeroMemory, addr @sentMsg, type NetworkMsg
+				mov eax, @i
+				mov @sentMsg.inst, 4
+				mov @sentMsg.sender, eax
+				inc @sentMsg.sender
+				mov @sentMsg.msglen, 200
+				
+				mov edi, offset _gameBoard
+				mul @sentMsg.msglen
+				add edi, eax
+				invoke _CopyMemory, edi, addr @sentMsg.msg, @sentMsg.msglen
+
+				inc @i
+				invoke _SendMsgTo, 0, addr @sentMsg
+			.endw
+
+			.if @flag == 0
+				;已没有存活的玩家
+				invoke RtlZeroMemory, addr @sentMsg, type NetworkMsg
+				mov @sentMsg.inst, 6
+				invoke _SendMsgTo, 0, addr @sentMsg
+				invoke _Reset
+				ret
+			.endif
+		.endif
+		
+		inc _sendFrequencyCnt
+		.if _sendFrequencyCnt >= SEND_LATENCY
+			sub _sendFrequencyCnt, SEND_LATENCY
+		.endif
 		ret
 _OnSendingMsg	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -830,8 +995,9 @@ _ProcessTimer	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 响应接收到事件时的操作
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_OnRecevingMsg proc 
+_OnReceivingMsg proc 
 		local @receivedMsg:NetworkMsg, @sentMsg:NetworkMsg
+		local @playerId, @playerSocket
 		.while inputQueue.len != 0
 			;提取消息
 			invoke _QueuePop, offset inputQueue, addr @receivedMsg
@@ -857,17 +1023,14 @@ _OnRecevingMsg proc
 				.if eax == _readyPlayers
 					;所有玩家都已经准备好，游戏开始
 					mov _onPlaying, 1
+					invoke RtlZeroMemory, addr @sentMsg, type NetworkMsg
 					mov @sentMsg.inst, 2
-					mov @sentMsg.sender, 0
-					mov @sentMsg.recver, 0
-					mov @sentMsg.msglen, 0
 					mov eax, _players
 					mov byte ptr @sentMsg.msg[0], al
 					invoke _SendMsgTo, 0, addr @sentMsg
 				.endif
 			.else
 				;default choice for missing all branches.
-
 			.endif
 
 
@@ -877,10 +1040,51 @@ _OnRecevingMsg proc
 			.if dword ptr _playerAlive[4 * eax] == 0
 				.continue
 			.endif
+
+			;解析信息，并做出合适的响应(响应不必总是要发回消息)
+			.if (@receivedMsg.inst > 8) && (_onPlaying != 0)
+				;转发道具
+				;查找存活的玩家
+				invoke _SelectAlive
+				mov @playerSocket, eax
+				mov @playerId, ebx
+				.if eax != 0
+					;还有符合条件的玩家
+					mov eax, @receivedMsg.inst
+					inc eax
+					mov @sentMsg.inst, eax
+					mov @sentMsg.sender, 0
+					mov eax, @playerId
+					mov @sentMsg.recver, eax
+					mov @sentMsg.msglen, 0
+					invoke _SendMsgTo, @playerId, addr @sentMsg
+				.endif
+			.elseif (@receivedMsg.inst == 3) && (_onPlaying != 0)
+				;保存地图
+				mov edi, offset _gameBoard
+				mov eax, @receivedMsg.sender
+				dec eax
+				mul @receivedMsg.msglen
+				add edi, eax
+				invoke _CopyMemory, edi, addr @receivedMsg.msg, @receivedMsg.msglen
+			.elseif (@receivedMsg.inst == 5) && (_onPlaying != 0)
+				;玩家死亡
+				mov eax, @receivedMsg.sender
+				dec eax
+				mov dword ptr _playerAlive[4 * eax], 0
+			.else
+				;default choice for missing all branches.
+			.endif
 		.endw
 		ret
-_OnRecevingMsg endp
+_OnReceivingMsg endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+
+
+
+
 
 
 
@@ -896,7 +1100,7 @@ _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam
 			mov	eax,lParam
 			.if	ax ==	FD_READ
 				invoke	_RecvData, wParam
-				invoke	_OnRecevingMsg
+				invoke	_OnReceivingMsg
 			.elseif	ax ==	FD_WRITE
 				invoke	_SendData, wParam	;继续发送缓冲区数据
 			.elseif	ax ==	FD_CLOSE
