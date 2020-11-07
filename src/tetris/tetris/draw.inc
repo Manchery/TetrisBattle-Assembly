@@ -19,3 +19,9 @@ _laugh			dword	0
 _boomPic		dword	0
 _mulOverBox		dword	0
 _singleOverBox	dword	0
+
+
+_fontNameW	db	64	dup(0)
+
+.const
+_fontName	db	"Arial", 0

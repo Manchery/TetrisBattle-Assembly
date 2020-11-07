@@ -110,11 +110,8 @@ dwCenterX	dd		?	;圆心X
 dwCenterY	dd		?	;圆心Y
 dwRadius	dd		?	;半径
 
-_fontNameW	db	64	dup(0)
-
 		.const
 szClassName	db	'Tetris: the game',0
-_fontName	db	"Arial", 0
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 代码段
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -784,6 +781,7 @@ _DrawIpAddress	proc _hDC
 		@hDcText,0,0,800,400,0FFFFFFh;过滤白色，只把文字图层的黑色(文字)贴到hDC上
 		invoke	DeleteObject, @textBmp
 		invoke	DeleteDC, @hDcText
+		invoke	DeleteObject, @font
 		popad
 		ret
 _DrawIpAddress endp
@@ -883,6 +881,14 @@ _OnPaint	proc	_hWnd,_hDC
 					inc @i
 				.endw
 			.endif
+
+			;********************************************************************
+			; 分数、道具数
+			;********************************************************************
+			invoke _DrawNumber, @bufferDC, 600, 475, _scores, 80, 36
+			invoke _DrawNumber, @bufferDC, 700, 705, _tools[0], 40, 18
+			invoke _DrawNumber, @bufferDC, 900, 705, _tools[4], 40, 18
+			invoke _DrawNumber, @bufferDC, 1100, 705, _tools[8], 40, 18
 		.endif
 
 		.if (_page == SINGLE_GAME_PAGE)
@@ -1155,12 +1161,18 @@ _ComputeGameLogic	proc  _hWnd
 							add _scores, 5
 						.elseif eax==2
 							add _scores, 15
+							invoke _GetRandomIndex, 3
+							inc _tools[eax*4]
 						.elseif eax==3
 							add _scores, 30
 							invoke _GetRandomIndex, 3
 							inc _tools[eax*4]
+							invoke _GetRandomIndex, 3
+							inc _tools[eax*4]
 						.elseif eax==4
 							add _scores, 50
+							invoke _GetRandomIndex, 3
+							inc _tools[eax*4]
 							invoke _GetRandomIndex, 3
 							inc _tools[eax*4]
 							invoke _GetRandomIndex, 3
@@ -1301,6 +1313,11 @@ _ComputeGameLogic	proc  _hWnd
 					mov _specialBlockRemain, 3
 					invoke _GetNextBlock
 					mov keys.n6, 0
+				.endif
+
+				.if keys.n7!=0
+					add _scores, 10
+					mov keys.n7, 0
 				.endif
 				;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
 			.else
