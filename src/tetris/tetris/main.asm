@@ -881,7 +881,12 @@ _OnPaint	proc	_hWnd,_hDC
 					inc @i
 				.endw
 			.endif
+		.endif
 
+		.if (_page == SINGLE_GAME_PAGE)
+			.if _paused==1
+				invoke _DrawPause, @bufferDC
+			.endif
 			;********************************************************************
 			; 分数、道具数
 			;********************************************************************
@@ -891,10 +896,13 @@ _OnPaint	proc	_hWnd,_hDC
 			invoke _DrawNumber, @bufferDC, 1100, 705, _tools[8], 40, 18
 		.endif
 
-		.if (_page == SINGLE_GAME_PAGE)
-			.if _paused==1
-				invoke _DrawPause, @bufferDC
-			.endif
+		.if _page == MULTIPLE_GAME_PAGE
+			;********************************************************************
+			; 分数、道具数
+			;********************************************************************
+			invoke _DrawNumber, @bufferDC, 700, 725, _tools[0], 40, 18
+			invoke _DrawNumber, @bufferDC, 900, 725, _tools[4], 40, 18
+			invoke _DrawNumber, @bufferDC, 1100, 725, _tools[8], 40, 18
 		.endif
 
 		;@@@@@@@@@@@@@@@@@@@@@@@@@@ DEV
