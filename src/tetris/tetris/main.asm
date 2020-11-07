@@ -787,12 +787,99 @@ _DrawIpAddress	proc _hDC
 _DrawIpAddress endp
 
 
+_GameDrawCommon proc @bufferDC
+		local	@i
+		local	@j
+		pushad
+
+		;********************************************************************
+		; 画地图
+		;********************************************************************
+			
+		mov @i, 0
+
+		.while @i < _mapHeight
+			mov @j, 0
+			.while @j < _mapWidth
+				invoke _GetMap, @i, @j
+				invoke _DrawSquare, @bufferDC, @i, @j, eax, _mapOffsetX, _mapOffsetY
+				inc @j
+			.endw
+			inc @i
+		.endw
+
+		;********************************************************************
+		; 当前块
+		;********************************************************************
+		.if _currentBlock != -1
+			mov eax, _currentBlock
+			mov ecx, 4
+			mul ecx
+			add eax, _currentStatus
+			mov ecx, 8
+			mul ecx
+
+			mov @i, 0
+			.while @i < 4
+				mov ecx, _currentPosI
+				add ecx, _blockOffset[eax * 4]
+				add eax, 1
+				mov edx, _currentPosJ
+				add edx, _blockOffset[eax * 4]
+				add eax, 1
+
+				invoke _DrawSquare, @bufferDC, ecx, edx, _currentColor, _mapOffsetX, _mapOffsetY
+				inc @i
+			.endw
+		.endif
+
+		;********************************************************************
+		; 下一块
+		;********************************************************************
+		.if _nextBlock != -1
+			mov eax, _nextBlock
+			mov ecx, 4
+			mul ecx
+			add eax, _nextStatus
+			mov ecx, 8
+			mul ecx
+
+			mov @i, 0
+			.while @i < 4
+				mov ecx, _nextPosI
+				add ecx, _blockOffset[eax * 4]
+				add eax, 1
+				mov edx, _nextPosJ
+				add edx, _blockOffset[eax * 4]
+				add eax, 1
+
+				invoke _DrawSquare, @bufferDC, ecx, edx, _nextColor, _nextOffsetX, _nextOffsetY
+				inc @i
+			.endw
+		.endif
+
+		;********************************************************************
+		; 道具数
+		;********************************************************************
+		.if (_page == SINGLE_GAME_PAGE)
+			invoke _DrawNumber, @bufferDC, 700, 705, _tools[0], 40, 18
+			invoke _DrawNumber, @bufferDC, 900, 705, _tools[4], 40, 18
+			invoke _DrawNumber, @bufferDC, 1100, 705, _tools[8], 40, 18
+		.endif
+		.if (_page == MULTIPLE_GAME_PAGE)
+			invoke _DrawNumber, @bufferDC, 700, 725, _tools[0], 40, 18
+			invoke _DrawNumber, @bufferDC, 900, 725, _tools[4], 40, 18
+			invoke _DrawNumber, @bufferDC, 1100, 725, _tools[8], 40, 18
+		.endif
+
+		popad
+		ret
+_GameDrawCommon endp
+
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _OnPaint	proc	_hWnd,_hDC
 		local	@stTime:SYSTEMTIME, @bufferDC; bufferDC is cache for pictures.
 		local	@bufferBmp
-		local	@i
-		local	@j
 
 		pushad
 		invoke	GetLocalTime,addr @stTime
@@ -815,94 +902,41 @@ _OnPaint	proc	_hWnd,_hDC
 			invoke _DrawIpAddress, @bufferDC
 		.endif
 
-		.if (_page == SINGLE_GAME_PAGE) || (_page == MULTIPLE_GAME_PAGE)
-			;********************************************************************
-			; 画地图
-			;********************************************************************
-			
-			mov @i, 0
-
-			.while @i < _mapHeight
-				mov @j, 0
-				.while @j < _mapWidth
-					invoke _GetMap, @i, @j
-					invoke _DrawSquare, @bufferDC, @i, @j, eax, _mapOffsetX, _mapOffsetY
-					inc @j
-				.endw
-				inc @i
-			.endw
-
-			;********************************************************************
-			; 当前块
-			;********************************************************************
-			.if _currentBlock != -1
-				mov eax, _currentBlock
-				mov ecx, 4
-				mul ecx
-				add eax, _currentStatus
-				mov ecx, 8
-				mul ecx
-
-				mov @i, 0
-				.while @i < 4
-					mov ecx, _currentPosI
-					add ecx, _blockOffset[eax * 4]
-					add eax, 1
-					mov edx, _currentPosJ
-					add edx, _blockOffset[eax * 4]
-					add eax, 1
-
-					invoke _DrawSquare, @bufferDC, ecx, edx, _currentColor, _mapOffsetX, _mapOffsetY
-					inc @i
-				.endw
-			.endif
-
-			;********************************************************************
-			; 下一块
-			;********************************************************************
-			.if _nextBlock != -1
-				mov eax, _nextBlock
-				mov ecx, 4
-				mul ecx
-				add eax, _nextStatus
-				mov ecx, 8
-				mul ecx
-
-				mov @i, 0
-				.while @i < 4
-					mov ecx, _nextPosI
-					add ecx, _blockOffset[eax * 4]
-					add eax, 1
-					mov edx, _nextPosJ
-					add edx, _blockOffset[eax * 4]
-					add eax, 1
-
-					invoke _DrawSquare, @bufferDC, ecx, edx, _nextColor, _nextOffsetX, _nextOffsetY
-					inc @i
-				.endw
-			.endif
-		.endif
-
 		.if (_page == SINGLE_GAME_PAGE)
+			invoke _GameDrawCommon, @bufferDC
+
+			;********************************************************************
+			; 分数
+			;********************************************************************
+			invoke _DrawNumber, @bufferDC, 600, 475, _scores, 80, 36
+			
+			;********************************************************************
+			; 暂停
+			;********************************************************************
 			.if _paused==1
 				invoke _DrawPause, @bufferDC
 			.endif
-			;********************************************************************
-			; 分数、道具数
-			;********************************************************************
-			invoke _DrawNumber, @bufferDC, 600, 475, _scores, 80, 36
-			invoke _DrawNumber, @bufferDC, 700, 705, _tools[0], 40, 18
-			invoke _DrawNumber, @bufferDC, 900, 705, _tools[4], 40, 18
-			invoke _DrawNumber, @bufferDC, 1100, 705, _tools[8], 40, 18
-		.endif
 
-		.if _page == MULTIPLE_GAME_PAGE
+			.if _gameover==1
+				invoke _DrawGameOverSingle, @bufferDC
+			.endif
+		.endif
+			
+		.if (_page == MULTIPLE_GAME_PAGE)
+			invoke _GameDrawCommon, @bufferDC
+
 			;********************************************************************
-			; 分数、道具数
+			; 道具发动
 			;********************************************************************
-			invoke _DrawNumber, @bufferDC, 700, 725, _tools[0], 40, 18
-			invoke _DrawNumber, @bufferDC, 900, 725, _tools[4], 40, 18
-			invoke _DrawNumber, @bufferDC, 1100, 725, _tools[8], 40, 18
+			.if _blackScreeningRemain
+				invoke _DrawBlackScreen, @bufferDC
+				dec _blackScreeningRemain
+			.endif
+
+			.if _bombPicRemain
+				invoke _DrawBombPic, @bufferDC
+				dec _bombPicRemain
+			.endif
 		.endif
 
 		;@@@@@@@@@@@@@@@@@@@@@@@@@@ DEV
@@ -934,48 +968,135 @@ _OnPaint	proc	_hWnd,_hDC
 _OnPaint	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+_GameComputeCommon	proc
+		pushad
+
+		inc _sinceLastMoveDown
+
+		.if _currentBlock == -1
+			invoke _GetNextBlock
+		.endif
+
+		;切换到下一个块
+		.if _readyNext==1
+			.if _currentBlock != -1
+				; 写入地图
+				invoke _WriteMap, _currentBlock, _currentStatus, _currentPosI, _currentPosJ, _currentColor
+				; 计算消行
+				invoke _ReduceLines, 0
+					
+				.if eax==1
+					add _scores, 5
+				.elseif eax==2
+					add _scores, 15
+					invoke _GetRandomIndex, 3
+					inc _tools[eax*4]
+				.elseif eax==3
+					add _scores, 30
+					invoke _GetRandomIndex, 3
+					inc _tools[eax*4]
+					invoke _GetRandomIndex, 3
+					inc _tools[eax*4]
+				.elseif eax==4
+					add _scores, 50
+					invoke _GetRandomIndex, 3
+					inc _tools[eax*4]
+					invoke _GetRandomIndex, 3
+					inc _tools[eax*4]
+					invoke _GetRandomIndex, 3
+					inc _tools[eax*4]
+				.endif
+
+				invoke _UpdateMoveDownInternal
+			.endif
+
+			mov eax, _nextBlock
+			mov _currentBlock, eax
+			mov eax, _nextColor
+			mov _currentColor, eax
+			mov eax, _nextPosI
+			mov _currentPosI, eax
+			mov eax, _nextPosJ
+			mov _currentPosJ, eax
+			mov eax, _nextStatus
+			mov _currentStatus, eax
+
+			invoke _PositionValid, _currentBlock, _currentStatus, _currentPosI, _currentPosJ
+			.if eax==0
+				mov _gameover, 1
+			.endif
+
+			invoke _GetNextBlock
+
+			mov _readyNext, 0
+		.endif
+
+		; 块自然下落
+		.if _readyNext==0
+			.if _slowingRemain==0
+				mov eax, _sinceLastMoveDown
+				.if eax >=_moveDownInternal
+					invoke _TryMove, 1, 0
+					mov _sinceLastMoveDown, 0
+					.if eax==0
+						mov _readyNext, 1
+					.endif
+				.endif
+			.else
+				mov eax, _sinceLastMoveDown
+				.if eax >=_slowingMoveDownInternal
+					invoke _TryMove, 1, 0
+					mov _sinceLastMoveDown, 0
+					.if eax==0
+						mov _readyNext, 1
+						dec _slowingRemain
+					.endif
+				.endif
+			.endif
+		.endif
+
+		;********************************************************************
+		; 上下左右
+		;********************************************************************
+		.if keys.up != 0
+			.if _readyNext==0
+				invoke _TryChangeStatus
+			.endif
+			mov keys.up, 0
+		.endif
+
+		.if keys.left!=0
+			.if _readyNext==0
+				invoke _TryMove, 0, -1
+			.endif
+			mov keys.left, 0
+		.endif
+
+		.if keys.right!=0
+			.if _readyNext==0
+				invoke _TryMove, 0, 1
+			.endif
+			mov keys.right, 0
+		.endif
+
+		.if keys.down!=0
+			.if _readyNext==0
+				invoke _TryMove, 1, 0
+				.if eax==1
+					mov _sinceLastMoveDown, 0
+				.endif
+			.endif
+			mov keys.down, 0
+		.endif
+		
+		popad
+		ret
+_GameComputeCommon endp
+
+
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ComputeGameLogic	proc  _hWnd
 		local @receivedMsg:NetworkMsg, @sendMsg:NetworkMsg
-		;TODO 在这里写游戏的逻辑
-
-		;下面是(离线)测试网络相关API的函数
-		;一旦测试全部通过，这些代码就会被移除
-		;它们也可以用来测试按键的行为：
-		;当debug时，按键松开事件不能收到，因此需要手动重置按键状态
-		;.if FALSE;keys.right;按右，就接收3条Input消息到缓冲中
-		;	mov edi, offset readBuffer
-		;	add edi, readBfCnt
-		;	mov eax, testStrlen
-		;	add	readBfCnt, eax
-		;	invoke _CopyMemory, edi, offset testString, testStrlen
-		;	mov keys.right, 0
-		;.elseif FALSE;keys.left;keys.left;按左，把inputBuffer解析到结构体中
-		;	invoke _RecvData;, offset readBuffer, readBfCnt
-		;	mov keys.left, 0
-		;	mov	eax, eax
-		;	mov keys.left, 0
-		;.elseif keys.up;按上，模拟取走一条Input消息
-		;按上建立连接
-		;	mov keys.up, 0
-		;	invoke _Connect, _hWnd
-		;	mov	eax, eax
-		;.elseif keys.space;按空格，生成两个总长度为7的Output消息，并在网络上发送
-		;	invoke _QueuePop, offset inputQueue, addr @testNetworkMsg
-		;	mov	@testNetworkMsg.inst, 233
-		;	mov	@testNetworkMsg.sender, 15
-		;	mov	@testNetworkMsg.recver, 25
-		;	mov @testNetworkMsg.msglen, 3
-		;	invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
-		;	invoke _QueuePush, offset outputQueue, addr @testNetworkMsg
-		;	invoke _SendData
-		;	mov	eax, eax
-		;	mov keys.space, 0
-		;.elseif FALSE;keys.return
-		;	invoke _SendData
-		;	mov	eax, eax
-		;	mov keys.return, 0
-		;.endif
-
 		pushad 
 
 		;@@@@@@@@@@@@@@@@@@@@@ 主页:选中单人 @@@@@@@@@@@@@@@@@@@@@
@@ -1149,126 +1270,9 @@ _ComputeGameLogic	proc  _hWnd
 			.endif
 		; @@@@@@@@@@@@@@@@@@@@ 单人: 游戏 @@@@@@@@@@@@@@@@@@@@@
 		.elseif _page == SINGLE_GAME_PAGE
-			.if _paused==0
-				inc _sinceLastMoveDown
-
-				;TODO: game start init
-
-				.if _currentBlock == -1
-					invoke _GetNextBlock
-				.endif
-
-				;切换到下一个块
-				.if _readyNext==1
-					.if _currentBlock != -1
-						; 写入地图
-						invoke _WriteMap, _currentBlock, _currentStatus, _currentPosI, _currentPosJ, _currentColor
-						; 计算消行
-						invoke _ReduceLines, 0
-					
-						.if eax==1
-							add _scores, 5
-						.elseif eax==2
-							add _scores, 15
-							invoke _GetRandomIndex, 3
-							inc _tools[eax*4]
-						.elseif eax==3
-							add _scores, 30
-							invoke _GetRandomIndex, 3
-							inc _tools[eax*4]
-							invoke _GetRandomIndex, 3
-							inc _tools[eax*4]
-						.elseif eax==4
-							add _scores, 50
-							invoke _GetRandomIndex, 3
-							inc _tools[eax*4]
-							invoke _GetRandomIndex, 3
-							inc _tools[eax*4]
-							invoke _GetRandomIndex, 3
-							inc _tools[eax*4]
-						.endif
-
-						invoke _UpdateMoveDownInternal
-					.endif
-
-					mov eax, _nextBlock
-					mov _currentBlock, eax
-					mov eax, _nextColor
-					mov _currentColor, eax
-					mov eax, _nextPosI
-					mov _currentPosI, eax
-					mov eax, _nextPosJ
-					mov _currentPosJ, eax
-					mov eax, _nextStatus
-					mov _currentStatus, eax
-
-					invoke _PositionValid, _currentBlock, _currentStatus, _currentPosI, _currentPosJ
-					.if eax==0
-						;TODO: gameover
-					.endif
-
-					invoke _GetNextBlock
-
-					mov _readyNext, 0
-				.endif
-
-				; 块自然下落
-				.if _readyNext==0
-					.if _slowingRemain==0
-						mov eax, _sinceLastMoveDown
-						.if eax >=_moveDownInternal
-							invoke _TryMove, 1, 0
-							mov _sinceLastMoveDown, 0
-							.if eax==0
-								mov _readyNext, 1
-							.endif
-						.endif
-					.else
-						mov eax, _sinceLastMoveDown
-						.if eax >=_slowingMoveDownInternal
-							invoke _TryMove, 1, 0
-							mov _sinceLastMoveDown, 0
-							.if eax==0
-								mov _readyNext, 1
-								dec _slowingRemain
-							.endif
-						.endif
-					.endif
-				.endif
-
-				;********************************************************************
-				; 上下左右
-				;********************************************************************
-				.if keys.up != 0
-					.if _readyNext==0
-						invoke _TryChangeStatus
-					.endif
-					mov keys.up, 0
-				.endif
-
-				.if keys.left!=0
-					.if _readyNext==0
-						invoke _TryMove, 0, -1
-					.endif
-					mov keys.left, 0
-				.endif
-
-				.if keys.right!=0
-					.if _readyNext==0
-						invoke _TryMove, 0, 1
-					.endif
-					mov keys.right, 0
-				.endif
-
-				.if keys.down!=0
-					.if _readyNext==0
-						invoke _TryMove, 1, 0
-						.if eax==1
-							mov _sinceLastMoveDown, 0
-						.endif
-					.endif
-					mov keys.down, 0
-				.endif
+			.if (_paused==0) && (_gameover==0)
+				
+				invoke _GameComputeCommon
 
 				;********************************************************************
 				; 道具
@@ -1301,6 +1305,9 @@ _ComputeGameLogic	proc  _hWnd
 					mov keys.n3, 0
 				.endif
 
+				;********************************************************************
+				; 暂停
+				;********************************************************************
 				.if keys.space != 0
 					mov _paused, 1
 					mov keys.space, 0
@@ -1329,14 +1336,42 @@ _ComputeGameLogic	proc  _hWnd
 					mov keys.n7, 0
 				.endif
 				;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
-			.else
+			.elseif (_paused==1)
 				.if keys.space != 0
 					mov _paused, 0
 					mov keys.space, 0
 				.endif
+			.elseif (_gameover==1)
+				.if keys.escape != 0
+					mov _page, HOME_SINGLE_PAGE
+					mov keys.escape, 0
+				.endif
 			.endif
 
 		.elseif _page == MULTIPLE_GAME_PAGE
+
+			invoke _GameComputeCommon
+
+			;********************************************************************
+			; 道具
+			;********************************************************************
+			.if keys.n1!=0
+				.if _tools[0]>0
+					;TODO emit tools 1
+				.endif
+				mov keys.n1, 0
+			.endif
+
+			.if keys.n2!=0
+				.if _tools[4]>0
+					;TODO emit tools 2
+				.endif
+				mov keys.n2, 0
+			.endif
+			
+			.if keys.n3!=0
+				;TODO emit tools 3
+			.endif
 
 		.endif
 
