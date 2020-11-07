@@ -183,7 +183,7 @@ _DrawOtherMap proc _hDC, @map, _offsetX, _offsetY, _sideLength
 			mul ecx
 			add eax, @j
 
-			if @map[eax]!=0
+			.if @map[eax]!=0
 				
 				mov eax, @i
 				mov ecx, _sideLength
@@ -198,7 +198,7 @@ _DrawOtherMap proc _hDC, @map, _offsetX, _offsetY, _sideLength
 				mov edx, ebx
 				add edx, _sideLength
 
-				invoke	Rectangle, @hDC, eax, ebx, ecx, edx
+				invoke	Rectangle, @hDc, eax, ebx, ecx, edx
 			.endif
 
 			inc @j

@@ -880,6 +880,7 @@ _GameDrawCommon endp
 _OnPaint	proc	_hWnd,_hDC
 		local	@stTime:SYSTEMTIME, @bufferDC; bufferDC is cache for pictures.
 		local	@bufferBmp
+		local	@i, @j
 
 		pushad
 		invoke	GetLocalTime,addr @stTime
@@ -931,10 +932,11 @@ _OnPaint	proc	_hWnd,_hDC
 
 			mov @i, 0
 			mov @j, 0
-			mov eax, ADDR _othermap
+			mov eax, OFFSET _othermap
 			mov esi, _playerNum
 			dec esi
-			.while @i < 4
+			mov ebx, _playerCount
+			.while @i < ebx
 				.if @i != esi
 					.if @j==0
 						invoke _DrawOtherMap, @bufferDC, eax, 604, 393, 15
@@ -1135,8 +1137,8 @@ _SendMap proc
 
 	mov @i, 0
 	.while @i<200
-		mov ebx, _map[@i*4]
 		mov eax, @i
+		mov ebx, _map[eax*4]
 		.if ebx!=0
 			mov BYTE PTR @sendMsg.msg[eax], 1
 		.else
@@ -1155,6 +1157,7 @@ _SendMap endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ComputeGameLogic	proc  _hWnd
 		local @receivedMsg:NetworkMsg, @sendMsg:NetworkMsg
+		local @i
 		pushad 
 
 		;@@@@@@@@@@@@@@@@@@@@@ 主页:选中单人 @@@@@@@@@@@@@@@@@@@@@
@@ -1480,14 +1483,14 @@ _ComputeGameLogic	proc  _hWnd
 					dec eax
 					mov ecx, 200
 					mul ecx
-					mov esi, ADDR _othermap
+					mov esi, OFFSET _othermap
 					add esi, eax
 						
 					mov @i, 0
 					.while @i<200
 						mov ecx, @i
-						mov eax, @receivedMsg.msg[ecx]
-						mov [esi], eax 
+						mov al, @receivedMsg.msg[ecx]
+						mov [esi], al 
 						inc @i
 						inc esi
 					.endw
