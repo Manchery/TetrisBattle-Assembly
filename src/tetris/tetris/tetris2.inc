@@ -157,7 +157,9 @@ _DrawSquare proc _hDC, _i, _j, _color, _offsetX, _offsetY
 	ret
 _DrawSquare endp
 
-
+.data
+_playerRemain dword 0
+.code
 
 _DrawOtherMap proc _hDC, @map, _offsetX, _offsetY, _sideLength
 	local @hDc
@@ -305,6 +307,22 @@ _DrawNumber	proc _hDC, _destX, _destY, _number, _fontH, _fontW
 		popad
 		ret
 _DrawNumber endp
+
+_DrawGameOverMultiple proc _hDC, _rank
+	local @hDcPause
+	pushad
+
+	invoke	CreateCompatibleDC,_hDC; 创建与_hDC兼容的另一个DC(设备上下文)，以备后续操作
+	mov		@hDcPause, eax
+	invoke	SelectObject, @hDcPause, _mulOverBox
+
+	invoke	BitBlt, _hDC, 271, 226, 356, 186 , @hDcPause, 0, 0, SRCCOPY
+	invoke _DrawNumber, _hDC, 271, 226, _rank, 80, 36
+	
+	invoke	DeleteDC, @hDcPause
+	popad
+	ret
+_DrawGameOverMultiple endp
 
 _DrawBombPic proc _hDC
 	local @hDcBombPic
@@ -550,6 +568,8 @@ _InitGameStatus proc
 
 	mov _sinceSendMap, 0	
 	mov _sendMapInternal, 200
+
+	mov _playerRemain, 0
 
 	pop eax
 	ret

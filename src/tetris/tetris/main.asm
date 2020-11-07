@@ -961,21 +961,14 @@ _OnPaint	proc	_hWnd,_hDC
 				invoke _DrawBombPic, @bufferDC
 				dec _bombPicRemain
 			.endif
-		.endif
 
-		;@@@@@@@@@@@@@@@@@@@@@@@@@@ DEV
-		.if (_page == SINGLE_GAME_PAGE)
-			.if _blackScreeningRemain
-				invoke _DrawBlackScreen, @bufferDC
-				dec _blackScreeningRemain
-			.endif
-
-			.if _bombPicRemain
-				invoke _DrawBombPic, @bufferDC
-				dec _bombPicRemain
+			;********************************************************************
+			; 游戏结束
+			;********************************************************************
+			.if _gameover==1
+				invoke _DrawGameOverMultiple, @bufferDC, _playerRemain
 			.endif
 		.endif
-		;@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 ;********************************************************************
 ;		把缓存绘制到hDC上
@@ -1442,16 +1435,24 @@ _ComputeGameLogic	proc  _hWnd
 					.endif
 					mov keys.n3, 0
 				.endif
+			.else
+				.if keys.escape != 0
+					invoke _Disconnect
+					mov _page, HOME_SINGLE_PAGE
+					mov keys.escape, 0
+				.endif
+			.endif
+
+			;********************************************************************
+			; 收到消息
+			;********************************************************************
+			.if inputQueue.len != 0
+				invoke _QueuePop, offset inputQueue, addr @receivedMsg
 
 				;********************************************************************
-				; 收到消息
+				; 道具收到
 				;********************************************************************
-				.if inputQueue.len != 0
-					invoke _QueuePop, offset inputQueue, addr @receivedMsg
-
-					;********************************************************************
-					; 道具收到
-					;********************************************************************
+				.if _gameover==0
 					.if @receivedMsg.inst == 12
 						.if @receivedMsg.sender == 0
 							mov _blackScreeningRemain, 300
@@ -1469,28 +1470,53 @@ _ComputeGameLogic	proc  _hWnd
 							invoke _GetNextBlock
 						.endif
 					.endif
+				.endif
 
-					;********************************************************************
-					; 收到地图
-					;********************************************************************
-					.if @receivedMsg.inst == 4
-						mov eax, @receivedMsg.sender
-						dec eax
-						mov ecx, 200
-						mul ecx
-						mov esi, ADDR _othermap
-						add esi, eax
+				;********************************************************************
+				; 收到地图
+				;********************************************************************
+				.if @receivedMsg.inst == 4
+					mov eax, @receivedMsg.sender
+					dec eax
+					mov ecx, 200
+					mul ecx
+					mov esi, ADDR _othermap
+					add esi, eax
 						
-						mov @i, 0
-						.while @i<200
-							mov ecx, @i
-							mov eax, @receivedMsg[ecx]
-							mov [esi], eax 
-							inc @i
-							inc esi
-						.endw
+					mov @i, 0
+					.while @i<200
+						mov ecx, @i
+						mov eax, @receivedMsg.msg[ecx]
+						mov [esi], eax 
+						inc @i
+						inc esi
+					.endw
+				.endif
+
+				;********************************************************************
+				; 所有结束，断开连接
+				;********************************************************************
+				.if @receivedMsg.inst == 6
+					invoke _Disconnect
+					mov _page, HOME_SINGLE_PAGE
+				.endif
+
+				;********************************************************************
+				; 用户状态
+				;********************************************************************
+				.if @receivedMsg.inst == 7
+					mov _playerRemain, 0
+					.if @receivedMsg.msg[0]!=0
+						inc _playerRemain
+					.endif
+					.if @receivedMsg.msg[1]!=0
+						inc _playerRemain
+					.endif
+					.if @receivedMsg.msg[2]!=0
+						inc _playerRemain
 					.endif
 				.endif
+
 			.endif
 
 		.endif
