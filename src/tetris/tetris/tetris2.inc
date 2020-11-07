@@ -465,3 +465,26 @@ _GetNextBlock proc
 
 	ret
 _GetNextBlock endp
+
+_UpdateMoveDownInternal proc
+	.if _scores < 50
+		mov _moveDownInternal, 50
+	.elseif _scores < 100
+		mov _moveDownInternal, 45
+	.elseif _scores < 150
+		mov _moveDownInternal, 40
+	.elseif _scores < 200
+		mov _moveDownInternal, 35
+	.elseif _scores < 250
+		mov _moveDownInternal, 30
+	.elseif _scores < 300
+		mov _moveDownInternal, 25
+	.elseif _scores < 350
+		mov _moveDownInternal, 20
+	.elseif _scores < 400
+		mov _moveDownInternal, 15
+	.else
+		mov _moveDownInternal, 10
+	.endif
+	ret
+_UpdateMoveDownInternal endp

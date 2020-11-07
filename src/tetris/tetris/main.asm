@@ -1097,7 +1097,6 @@ _ComputeGameLogic	proc  _hWnd
 					; 计算消行
 					invoke _ReduceLines, 0
 					
-					;TODO: 开局分发道具
 					.if eax==1
 						add _scores, 5
 					.elseif eax==2
@@ -1113,6 +1112,8 @@ _ComputeGameLogic	proc  _hWnd
 						invoke _GetRandomIndex, 3
 						inc _tools[eax*4]
 					.endif
+
+					invoke _UpdateMoveDownInternal
 				.endif
 
 				mov eax, _nextBlock
