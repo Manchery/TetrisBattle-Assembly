@@ -873,12 +873,19 @@ _OnPaint	proc	_hWnd,_hDC
 			.endif
 		.endif
 
+		;@@@@@@@@@@@@@@@@@@@@@@@@@@ DEV
 		.if (_page == SINGLE_GAME_PAGE)
 			.if _blackScreeningRemain
-				;invoke _DrawBlackScreen, @bufferDC
+				invoke _DrawBlackScreen, @bufferDC
 				dec _blackScreeningRemain
 			.endif
+
+			.if _bombPicRemain
+				invoke _DrawBombPic, @bufferDC
+				dec _bombPicRemain
+			.endif
 		.endif
+		;@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 ;********************************************************************
 ;		把缓存绘制到hDC上
@@ -1205,11 +1212,12 @@ _ComputeGameLogic	proc  _hWnd
 
 			;@@@@@@@@@@@@@@@@@@@@@@@@@ DEV @@@@@@@@@@@@@@@@@@@@@
 			.if keys.n4!=0
-				mov _blackScreeningRemain, 200
+				mov _blackScreeningRemain, 300
 				mov keys.n4, 0
 			.endif
 
 			.if keys.n5!=0
+				mov _bombPicRemain, 100
 				invoke _Bomb
 				mov keys.n5, 0
 			.endif
