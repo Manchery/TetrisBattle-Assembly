@@ -957,6 +957,7 @@ _ComputeGameLogic	proc  _hWnd
 				mov keys.right, HOME_MULTIPLE_PAGE
 			.elseif keys.return
 				mov _page, SINGLE_GAME_PAGE
+				invoke _InitSingleGame
 				mov keys.return, 0
 			.endif
 		; @@@@@@@@@@@@@@@@@@@@ 主页:选中多人 @@@@@@@@@@@@@@@@@@@@@
@@ -1085,13 +1086,13 @@ _ComputeGameLogic	proc  _hWnd
 					.elseif eax==3
 						add _scores, 30
 						invoke _GetRandomIndex, 3
-						inc _tools[eax]
+						inc _tools[eax*4]
 					.elseif eax==4
 						add _scores, 50
 						invoke _GetRandomIndex, 3
-						inc _tools[eax]
+						inc _tools[eax*4]
 						invoke _GetRandomIndex, 3
-						inc _tools[eax]
+						inc _tools[eax*4]
 					.endif
 				.endif
 

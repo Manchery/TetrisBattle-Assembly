@@ -310,6 +310,48 @@ _tools dword 0, 0, 1
 
 .code
 
+; 初始化一局担任游戏
+_InitSingleGame proc
+	local @i
+	push eax
+
+	mov @i, 0
+	.while @i<200
+		mov eax, @i
+		mov _map[eax*4], 0
+		inc @i
+	.endw
+
+	mov _currentBlock, -1
+	mov _currentColor, 0
+	mov _currentStatus, 0
+	mov _currentPosI, 0
+	mov _currentPosJ, 0
+
+	mov _nextBlock, 0
+	mov _nextColor, 0
+	mov _nextPosI, 0
+	mov _nextPosJ, 0
+	mov _nextStatus, 0
+
+	mov _readyNext, 1	
+	mov _sinceLastMoveDown, 0	
+	mov _moveDownInternal, 50	
+
+	mov _scores, 0			
+	mov _slowingRemain, 0				
+	mov	_slowingMoveDownInternal, 0
+
+	mov _tools[0], 0
+	mov _tools[4], 0
+	mov _tools[8], 0
+	invoke _GetRandomIndex, 3
+	inc _tools[eax*4]
+
+	pop eax
+	ret
+_InitSingleGame endp
+
 ; 尝试消去满行
 ; _force：强制消掉底下若干行
 _ReduceLines proc _force
