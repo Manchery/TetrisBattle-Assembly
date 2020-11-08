@@ -93,9 +93,6 @@ _Reset	proc
 			inc @cnt
 		.endw
 
-		;todo:
-		;用户在DisconnectScreen中按下空格回到主界面。i.e.
-		;invoke _ShowDisconnectScreen
 		popad
 		ret
 _Reset	endp
@@ -124,7 +121,7 @@ _Disconnect	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 连接到服务器
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-_StartListen proc _hWnd	;_lParam;We dont need this params, for now.
+_StartListen proc _hWnd
 		local	@stSin:sockaddr_in, @on:dword
 
 ;********************************************************************
@@ -140,7 +137,7 @@ _StartListen proc _hWnd	;_lParam;We dont need this params, for now.
 		mov	@stSin.sin_addr,INADDR_ANY
 		invoke	bind,hListenSocket,addr @stSin,sizeof @stSin
 		.if	eax
-			invoke	MessageBox,_hWnd,addr szErrBind,\;todo add a szErrBind str.
+			invoke	MessageBox,_hWnd,addr szErrBind,\
 				NULL,MB_OK or MB_ICONSTOP
 			invoke	ExitProcess,NULL
 			ret
@@ -148,7 +145,7 @@ _StartListen proc _hWnd	;_lParam;We dont need this params, for now.
 		mov	@on, 1
 		invoke	setsockopt, hListenSocket, SOL_SOCKET, SO_REUSEADDR, addr @on, type @on
 		.if	eax
-			invoke	MessageBox,_hWnd,addr szErrBind,\;todo add a szErrBind str.
+			invoke	MessageBox,_hWnd,addr szErrBind,\
 				NULL,MB_OK or MB_ICONSTOP
 			invoke	ExitProcess,NULL
 			ret
@@ -161,10 +158,6 @@ _StartListen proc _hWnd	;_lParam;We dont need this params, for now.
 		;FD_CLOSE大概要判断下是不是监听套接字。如果是监听套接字就退出程序(或重连)吧。
 		invoke	WSAAsyncSelect,hListenSocket,_hWnd,WM_SOCKET,FD_ACCEPT or FD_CLOSE
 		invoke	listen,hListenSocket,100
-		;下面的代码不在此处处理。
-		;所以除了最后退出程序之外，貌似没有必要提前关闭hListenSocket
-		;TODO:这句要注释
-		;invoke	closesocket,hListenSocket
 		ret
 _StartListen	endp
 
@@ -388,7 +381,7 @@ _RecvData	proc @socket
 		sub	eax, ecx
 		;added for debug/test
 		;jmp _Recved;added for debug/test
-		.if	eax ;这个判断实际上是不必要的，
+		.if	eax
 			invoke	recv,@socket,esi,eax,NULL
 			.if	eax ==	SOCKET_ERROR
 				invoke	WSAGetLastError
@@ -408,7 +401,6 @@ _Recved:
 		;将esi定位到buffer头部
 		lea edx, (Client ptr [ebx]).readBuffer
 		mov	esi, edx
-		;todo check if this is fine
 		.while dword ptr (Client ptr [ebx]).readBfCnt > 0
 			movzx	eax, byte ptr[esi];获取下一条消息的长度
 			mov		@msgLength, eax
@@ -654,17 +646,7 @@ _SendData	proc @socket
 				mov	ebx,(Client ptr [ebx]).writeBfCnt
 				or	ebx,ebx
 				jz	_Ret
-				;The line below is necessary for program:
 				invoke	send,@socket,esi,ebx,0
-
-				;for debug/todo:
-				;模拟5个字节成功发送的事件
-				;mov ecx, @playerMsg
-				;.if dword ptr (Client ptr [ecx]).writeBfCnt > 5
-				;	mov eax, 5
-				;.else
-				;	mov eax, (Client ptr [ecx]).writeBfCnt
-				;.endif
 
 				;异常处理
 				.if	eax ==	SOCKET_ERROR
@@ -831,14 +813,7 @@ _OnSocketAccept proc _hWnd
 			mov eax, _players
 			mov @connectMsg.recver, eax
 			invoke _SendMsgTo, _players, addr @connectMsg
-
-			
 		.endif
-		;并不是，我们只有通过关闭套接字的方式才能阻止新传入的连接...
-		;回上面。。但也不一定。。就让它们在队列里等着不香嘛233
-		;所以除了最后退出程序之外，貌似没有必要提前关闭hListenSocket
-		;所以下面这句应该放在程序退出前
-		;invoke	closesocket,hListenSocket
 		ret
 _OnSocketAccept	endp
 
@@ -872,10 +847,6 @@ _OnPaint	proc	_hWnd,_hDC
 		invoke	CreateCompatibleBitmap, _hDC, WINDOW_WIDTH, WINDOW_HEIGHT
 		mov		@bufferBmp,	eax
 		invoke	SelectObject, @bufferDC, @bufferBmp
-;********************************************************************
-; Customized 画一个自定义背景
-;********************************************************************
-		;invoke _DrawCustomizedBackground, @bufferDC
 ;********************************************************************
 ; 画时钟圆周上的点
 ;********************************************************************
@@ -936,8 +907,7 @@ _OnSendingMsg	proc  _hWnd
 		.if _onPlaying == 0
 			ret
 		.endif
-		;TODO 在这里写服务器的发送事件的逻辑
-		;TODO 在这里判断游戏结束等内容，而不要在_OnSocketClose或_Reset中判断
+		;服务器的发送事件的逻辑
 		
 		.if _sendFrequencyCnt == 0
 			;开始更新游戏状态
@@ -1007,15 +977,9 @@ _OnSendingMsg	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ProcessTimer	proc  _hWnd, timerId
-		;TODO 调用ProcessTimer，以判断具体的定时器类型并做出响应。
-		;如，当前的定时器可能是UpdateFrame计时器，
-		;此时我们就计算当前的状态，并修改对应的状态。
 		.if timerId == ID_TIMER
 			invoke	_OnSendingMsg, _hWnd
 			invoke	InvalidateRect,_hWnd,NULL,FALSE
-		.else
-			;TODO 在此处添加其它的计时器
-			ret
 		.endif
 		ret
 _ProcessTimer	endp
@@ -1106,14 +1070,6 @@ _OnReceivingMsg proc
 		ret
 _OnReceivingMsg endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-
-
-
-
-
-
-
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ProcWinMain	proc	uses ebx edi esi hWnd,uMsg,wParam,lParam

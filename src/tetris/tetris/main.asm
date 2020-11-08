@@ -1,15 +1,3 @@
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-; Sample code for < Win32ASM Programming 2nd Edition>
-; by 罗云彬, http://asm.yeah.net
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-; Clock.asm
-; 时钟例子：使用 GDI 函数绘画指针
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-; 使用 nmake 或下列命令进行编译和链接:
-; ml /c /coff Clock.asm
-; rc Clock.rc
-; Link /subsystem:windows Clock.obj Clock.res
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 		.386
 		.model flat, stdcall
 		option casemap :none
@@ -74,7 +62,7 @@ MULTIPLE_CONNECT_ERROR_PAGE	equ		8
 		.data?
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; 结构体定义(注意对齐，或总是使用DWORD)
-KeyState	struct	;KeyState可识别上下左右、空格、ESC、数字1~6
+KeyState	struct	;KeyState可识别上下左右、空格、ESC、数字0~9、小数点、退格键
 	up			dword	0
 	down		dword	0
 	left		dword	0
@@ -129,13 +117,9 @@ _Disconnect	proc
 		mov writeBfCnt,			0
 		mov inputQueue.len,		0
 		mov outputQueue.len,	0
-		;不必须，但我担心有的时候把它当字符串处理，所以还是调了下RtlZeroMemory
+
 		invoke RtlZeroMemory, offset readBuffer,  NETWORK_BUFFER_LENGTH
 		invoke RtlZeroMemory, offset writeBuffer, NETWORK_BUFFER_LENGTH
-
-		;todo:
-		;用户在DisconnectScreen中按下空格回到主界面。i.e.
-		;invoke _ShowDisconnectScreen
 		ret
 _Disconnect	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -146,8 +130,6 @@ _Connect	proc _hWnd
 
 		pushad
 		xor	eax,eax
-		;Todo what's a dbStep?
-		;mov	dbStep,al
 		mov	readBfCnt,eax
 		mov	writeBfCnt,eax
 ;********************************************************************
@@ -156,8 +138,6 @@ _Connect	proc _hWnd
 		invoke	RtlZeroMemory,addr @stSin,sizeof @stSin
 		invoke	inet_addr,offset serverIpAddr
 		.if	eax ==	INADDR_NONE
-			;invoke	MessageBox,_hWnd,addr szErrIP,NULL,MB_OK or MB_ICONSTOP
-			;mov _page, MULTIPLE_CONNECT_ERROR_PAGE
 			jmp	_Err
 		.endif
 		mov	@stSin.sin_addr,eax
@@ -175,7 +155,6 @@ _Connect	proc _hWnd
 		.if	eax ==	SOCKET_ERROR
 			invoke	WSAGetLastError
 			.if eax != WSAEWOULDBLOCK
-				;invoke	MessageBox,hWinMain,addr szErrConnect,NULL,MB_OK or MB_ICONSTOP
 				jmp	_Err
 			.endif
 		.endif
@@ -186,8 +165,6 @@ _Err:
 		invoke	_Disconnect
 		ret
 _Connect	endp
-
-
 
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -319,9 +296,7 @@ _RecvData	proc
 		sub	eax, ecx
 		;added for debug/test
 		;jmp _Recved;added for debug/test
-		.if	eax ;这个判断实际上是不必要的，
-				;因为一次读取+处理后总不可能剩余超过255B，
-				;而缓冲区有8192B.
+		.if	eax 
 			invoke	recv,hSocket,esi,eax,NULL
 			.if	eax ==	SOCKET_ERROR
 				invoke	WSAGetLastError
@@ -509,7 +484,7 @@ _DrawLine	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _DrawCustomizedBackground	proc _hDC
 		local @hDcBack; 'Back' for 'background'. 
-		;todo demo How to index an array.
+		;demo: How to index an array.
 		;mov		eax,	1
 		;mov		ecx,	type NetworkMsg
 		;mul		ecx
@@ -538,14 +513,11 @@ _DrawCustomizedBackground	proc _hDC
 		invoke	BitBlt,_hDC,0,0,WINDOW_WIDTH, WINDOW_HEIGHT, @hDcBack,0,0,SRCCOPY ; 通过DC读取图片，复制到hDC，从而完成显示
 
 		invoke	DeleteDC, @hDcBack ;回收资源（DC）
-		; For your ref:我应该使用DeleteDC还是ReleaseDC?
+		; ref:我应该使用DeleteDC还是ReleaseDC?
 		; https://www.cnblogs.com/vranger/p/3564606.html
-		; Todo: 没有自动补全怎么破...
 		ret
 _DrawCustomizedBackground	endp
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 发送缓冲区中的数据，上次的数据有可能未发送完，故每次发送前，
@@ -595,16 +567,7 @@ _SendData	proc
 				mov	ebx,writeBfCnt
 				or	ebx,ebx
 				jz	_Ret
-				;The line below is necessary for program:
 				invoke	send,hSocket,esi,ebx,0
-
-				;for debug/todo:
-				;模拟5个字节成功发送的事件
-				;.if writeBfCnt > 5
-				;	mov eax, 5
-				;.else
-				;	mov eax, writeBfCnt
-				;.endif
 
 				;异常处理
 				.if	eax ==	SOCKET_ERROR
@@ -739,9 +702,6 @@ _InitGame	proc  _hWnd
 		mov		_mulOverBox, eax	
 		invoke	LoadBitmap, hInstance, IDB_BITMAP_SINGLEOVER
 		mov		_singleOverBox, eax	
-
-		;TODO 如果你们愿意的话，可以考虑把所有背景相关的变量搞个结构体
-		;但其实意义不大，因为我的VS没有自动补全
 
 		ret
 _InitGame	endp
@@ -1528,6 +1488,9 @@ _ComputeGameLogic	proc  _hWnd
 					.if @receivedMsg.msg[2]!=0
 						inc _playerRemain
 					.endif
+					.if @receivedMsg.msg[3]!=0
+						inc _playerRemain
+					.endif
 				.endif
 
 			.endif
@@ -1541,9 +1504,6 @@ _ComputeGameLogic	endp
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _ProcessTimer	proc  _hWnd, timerId
-		;TODO 调用ProcessTimer，以判断具体的定时器类型并做出响应。
-		;如，当前的定时器可能是UpdateFrame计时器，
-		;此时我们就计算当前的状态，并修改对应的状态。
 		.if timerId == ID_TIMER
 			invoke	_ComputeGameLogic, _hWnd
 			invoke	InvalidateRect,_hWnd,NULL,FALSE
