@@ -583,6 +583,7 @@ _InitGameStatus proc
 	mov _sendMapInternal, 200
 
 	mov _playerRemain, 0
+	mov _mulrank, 0
 
 	pop eax
 	ret
@@ -710,6 +711,8 @@ _bombProb EQU 20
 
 _paused dword 0
 _gameover dword 0
+
+_mulrank dword 0
 
 .code
 

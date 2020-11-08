@@ -968,7 +968,7 @@ _OnPaint	proc	_hWnd,_hDC
 			; ”Œœ∑Ω· ¯
 			;********************************************************************
 			.if _gameover==1
-				invoke _DrawGameOverMultiple, @bufferDC, _playerRemain
+				invoke _DrawGameOverMultiple, @bufferDC, _mulrank
 			.endif
 		.endif
 
@@ -1053,6 +1053,9 @@ _GameComputeCommon	proc
 					mov @sendMsg.msglen, 0
 					invoke _QueuePush, offset outputQueue, addr @sendMsg
 					invoke _SendData
+
+					mov eax, _playerRemain
+					mov _mulrank, eax 
 				.endif
 
 			.endif
