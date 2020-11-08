@@ -32,7 +32,7 @@
 
 俄罗斯方块，支持单机模式和多人乱斗模式。进入游戏后控制左右键和回车键选择游戏模式。
 
-<img src="C:\Users\corn\AppData\Roaming\Typora\typora-user-images\image-20201108021016849.png" alt="image-20201108021016849" style="zoom:33%;" />
+<img src="\pic\HomeSelect.png" alt="home select" style="zoom:40%;" />
 
 #### 单机模式
 
@@ -46,7 +46,7 @@
 
 方块下落速度：随着游戏分数增加，方块下落速度越来越快，达到最快速度后保持该速度。
 
-<img src="C:\Users\corn\AppData\Roaming\Typora\typora-user-images\image-20201108022409619.png" alt="image-20201108022409619" style="zoom:33%;" />
+<img src="\pic\SingleGame.png" alt="single game" style="zoom:40%;" />
 
 #### 多人乱斗模式
 
