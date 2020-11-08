@@ -1496,7 +1496,11 @@ _ComputeGameLogic	proc  _hWnd
 					.while @i<200
 						mov ecx, @i
 						mov al, @receivedMsg.msg[ecx]
-						mov [esi], al 
+						.if al!=0
+							mov BYTE PTR [esi], 1
+						.else
+							mov BYTE PTR [esi], 0
+						.endif
 						inc @i
 						inc esi
 					.endw

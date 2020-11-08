@@ -955,7 +955,7 @@ _OnSendingMsg	proc  _hWnd
 				mov edi, offset _gameBoard
 				mul @sentMsg.msglen
 				add edi, eax
-				invoke _CopyMemory, edi, addr @sentMsg.msg, @sentMsg.msglen
+				invoke _CopyMemory,addr @sentMsg.msg, edi, @sentMsg.msglen
 
 				inc @i
 				invoke _SendMsgTo, 0, addr @sentMsg

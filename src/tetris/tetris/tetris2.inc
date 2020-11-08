@@ -190,7 +190,9 @@ _DrawOtherMap proc _hDC, @map, _offsetX, _offsetY, _sideLength
 			mul ecx
 			add eax, @j
 
-			.if byte ptr [esi] != 0
+			mov dl, [esi]
+
+			.if dl != 0
 				
 				mov eax, @i
 				mov ecx, _sideLength
@@ -209,7 +211,7 @@ _DrawOtherMap proc _hDC, @map, _offsetX, _offsetY, _sideLength
 			.endif
 
 			inc @j
-			add esi, 4
+			inc esi
 		.endw
 		inc @i
 	.endw
