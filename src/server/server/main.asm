@@ -66,6 +66,8 @@ _Reset	proc
 		mov _onPlaying,			0
 		mov _sendFrequencyCnt,	0
 
+		invoke RtlZeroMemory, offset _gameBoard, 800
+
 		;清理结构体等
 		mov esi, offset _sockets
 		mov edi, offset _playerMsgs
@@ -692,7 +694,8 @@ _SendMsgTo	proc @user, @msgAddr
 	mov @sentCnt, 0
 	.while @cnt < MAX_PLAYERS
 		mov eax, @user 
-		.if (dword ptr [edi] == 0) || ((eax != 0) && (eax != @cnt))
+		dec eax
+		.if (dword ptr [edi] == 0) || ((@user != 0) && (eax != @cnt))
 		.else
 			invoke  _QueuePush, addr (Client ptr [esi]).outputQueue, @msgAddr
 			invoke _SendData, [edi]
@@ -801,15 +804,16 @@ _OnSocketAccept proc _hWnd
 			mov [edi], eax
 			invoke	WSAAsyncSelect,eax,_hWnd,WM_SOCKET,FD_READ or FD_WRITE or FD_CLOSE
 
+			;维护计数器
+			inc _players
+
 			;发送初始化消息(消息指令为0)
 			invoke	RtlZeroMemory, addr @connectMsg, type NetworkMsg
 			mov eax, _players
-			inc eax
 			mov @connectMsg.recver, eax
 			invoke _SendMsgTo, _players, addr @connectMsg
 
-			;维护计数器
-			inc _players
+			
 		.endif
 		;并不是，我们只有通过关闭套接字的方式才能阻止新传入的连接...
 		;回上面。。但也不一定。。就让它们在队列里等着不香嘛233
@@ -1061,6 +1065,7 @@ _OnReceivingMsg proc
 					inc eax
 					mov @sentMsg.inst, eax
 					mov @sentMsg.sender, 0
+					inc @playerId
 					mov eax, @playerId
 					mov @sentMsg.recver, eax
 					mov @sentMsg.msglen, 0
