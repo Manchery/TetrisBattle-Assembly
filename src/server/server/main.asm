@@ -945,6 +945,7 @@ _OnSendingMsg	proc  _hWnd
 			mov @i, 0
 			mov edx, _players
 			.while edx > @i
+				push edx
 				invoke RtlZeroMemory, addr @sentMsg, type NetworkMsg
 				mov eax, @i
 				mov @sentMsg.inst, 4
@@ -959,6 +960,8 @@ _OnSendingMsg	proc  _hWnd
 
 				inc @i
 				invoke _SendMsgTo, 0, addr @sentMsg
+
+				pop edx
 			.endw
 
 			.if @flag == 0
