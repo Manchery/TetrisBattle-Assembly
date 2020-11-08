@@ -1,6 +1,5 @@
 ;Hint 如果修改了这个文件中的变量，需要重新生成项目
 
-;include		windows.inc
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Equ等值定义
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -38,9 +37,6 @@ writeBfCnt		dword		0
 ;  本质是循环队列
 ;  **队满时，后到来的数据将会替换最早的数据**
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;严禁修改此结构体的定义
-;修改前请联系zysj
 MsgQueue	struct;收发队列均用该结构体
 	msgs	NetworkMsg		NETWORK_MSGBUF_LENGTH dup(<>);消息队列
 	len		dword			0;队列长度
@@ -49,7 +45,6 @@ MsgQueue	ends
 
 inputQueue	MsgQueue	<>
 outputQueue	MsgQueue	<>
-;TODO 写个操作消息队列的函数.
 
 		.const
 szErrIP		db	'无效的服务器IP地址!',0

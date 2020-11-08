@@ -23,7 +23,6 @@ _currentStatus dword 0
 _currentPosI dword 0
 _currentPosJ dword 0
 
-; TODO: init block random
 ; 下一个方块、颜色
 _nextBlock dword 0
 _nextColor dword 0
@@ -511,7 +510,6 @@ _TryChangeStatus endp
 .data 
 
 _readyNext dd 1					; 当前块已经固定，可以切换到操作下一个块
-
 
 _sinceLastMoveDown dd 0			; 距离上一次当前块下移已经过去了多少个单位时间
 _moveDownInternal dd 50			; 当前块下移的时间间隔
