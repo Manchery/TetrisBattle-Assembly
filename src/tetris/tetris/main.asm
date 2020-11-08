@@ -101,9 +101,7 @@ keys			KeyState	<>
 _page			dword		0
 _playerNum		dword		0
 _playerCount	dword		0
-_ipLen			dword		0
 _ifConnect		dword		0
-_ipStr			db			'127.0.0.1', 20 dup(0)
 hInstance	dd		?
 hWinMain	dd		?
 dwCenterX	dd		?	;Ô²ÐÄX
@@ -1391,7 +1389,9 @@ _ComputeGameLogic	proc  _hWnd
 			.endif
 
 		.elseif _page == MULTIPLE_GAME_PAGE
+
 			.if (_gameover==0)
+
 				invoke _GameComputeCommon
 				inc _sinceSendMap
 				mov eax, _sinceSendMap

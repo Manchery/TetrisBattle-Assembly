@@ -24,7 +24,7 @@ ID_TIMER				equ		1
 WINDOW_WIDTH			equ		300
 WINDOW_HEIGHT			equ		200
 TIMER_MAIN_INTERVAL		equ		10;ms
-SEND_LATENCY			equ		300;300 * 10ms = 3s
+SEND_LATENCY			equ		50;50 * 10ms = 0.5s
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; 数据段
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -173,7 +173,7 @@ _StartListen	endp
 ; 响应关闭事件
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 _OnSocketClose proc @closedSocket
-		local @cnt
+		local @cnt, @flag, @i
 		mov eax, @closedSocket
 		.if(eax == hListenSocket)
 			;监听服务器已关闭
@@ -209,6 +209,25 @@ _OnSocketClose proc @closedSocket
 			inc @cnt
 		.endw
 
+		;判断所有玩家是否都断开连接(或死亡)
+		mov @flag, 0
+		mov @i, 0
+		mov edx, _players
+		.while edx > @i
+			mov eax, @i
+			mov ebx, dword ptr _sockets[eax * 4]
+			.if ebx > 0
+				mov ebx, 1
+			.endif
+			and ebx, dword ptr _playerAlive[eax * 4]
+			or	@flag, ebx
+			inc @i
+		.endw
+
+		;如果所有玩家都断开连接(或死亡)，就重置连接
+		.if @flag == 0
+			invoke _Reset
+		.endif
 
 		ret
 _OnSocketClose	endp
@@ -1040,12 +1059,18 @@ _OnReceivingMsg proc
 					mov byte ptr @sentMsg.msg[0], al
 					invoke _SendMsgTo, 0, addr @sentMsg
 				.endif
-			.else
-				;default choice for missing all branches.
+			.elseif (@receivedMsg.inst == 3) && (_onPlaying != 0)
+				;保存地图
+				mov edi, offset _gameBoard
+				mov eax, @receivedMsg.sender
+				dec eax
+				mul @receivedMsg.msglen
+				add edi, eax
+				invoke _CopyMemory, edi, addr @receivedMsg.msg, @receivedMsg.msglen
 			.endif
 
 
-			;再判断是否已断开连接
+			;再判断是否存活
 			mov eax, @receivedMsg.sender
 			dec eax
 			.if dword ptr _playerAlive[4 * eax] == 0
@@ -1071,21 +1096,11 @@ _OnReceivingMsg proc
 					mov @sentMsg.msglen, 0
 					invoke _SendMsgTo, @playerId, addr @sentMsg
 				.endif
-			.elseif (@receivedMsg.inst == 3) && (_onPlaying != 0)
-				;保存地图
-				mov edi, offset _gameBoard
-				mov eax, @receivedMsg.sender
-				dec eax
-				mul @receivedMsg.msglen
-				add edi, eax
-				invoke _CopyMemory, edi, addr @receivedMsg.msg, @receivedMsg.msglen
 			.elseif (@receivedMsg.inst == 5) && (_onPlaying != 0)
 				;玩家死亡
 				mov eax, @receivedMsg.sender
 				dec eax
 				mov dword ptr _playerAlive[4 * eax], 0
-			.else
-				;default choice for missing all branches.
 			.endif
 		.endw
 		ret

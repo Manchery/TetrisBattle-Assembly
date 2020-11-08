@@ -6,7 +6,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 TCP_PORT				equ		10086;Server will need to listen on 10086.
 NETWORK_BUFFER_LENGTH	equ		8192
-;todo change 4 to 128. 4 is used for debugging.
 NETWORK_MSGBUF_LENGTH	equ		128;任意时刻，最多可有128条未读消息和未发消息。
 WM_SOCKET				equ		WM_USER + 100
 	.data
@@ -24,6 +23,8 @@ NetworkMsg	ends
 ;  总是调用提供的接口收、发数据
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 serverIpAddr	db		    '127.0.0.1', 0, 10 DUP(0) 	;use localhost to test network
+_ipLen			dword		9
+_ipStr			db			'127.0.0.1', 20 dup(0)
 hSocket			dd			?
 readBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)
 writeBuffer		byte		NETWORK_BUFFER_LENGTH	dup(0)
