@@ -331,8 +331,8 @@ _DrawGameOverMultiple proc _hDC, _rank
 	mov		@hDcPause, eax
 	invoke	SelectObject, @hDcPause, _mulOverBox
 
-	invoke	BitBlt, _hDC, 271, 226, 356, 186 , @hDcPause, 0, 0, SRCCOPY
-	invoke _DrawNumber, _hDC, 271, 226, _rank, 80, 36
+	invoke	BitBlt, _hDC, 120, 320, 356, 186 , @hDcPause, 0, 0, SRCCOPY
+	invoke _DrawNumber, _hDC, 120+220, 320+85, _rank, 80, 36
 	
 	invoke	DeleteDC, @hDcPause
 	popad
