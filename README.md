@@ -75,7 +75,7 @@ Game operations:
   - Game operations are similar with those in single mode. The game will end when the block exceeds the game box, and all players will be ranked according to their survival time.
   
 <p align="center">
-    <img src="doc/pic/MulGame.png" alt="MulGame" width="450px" /> <img src="doc/pic/MulGameOver.png" alt="MulGameOver" width="450px" />
+    <img src="doc/pic/MulGame.png" alt="MulGame" width="450px" /> <img src="doc/pic/MULGameOver.png" alt="MulGameOver" width="450px" />
 </p>
 
 Game items:
