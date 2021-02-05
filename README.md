@@ -28,7 +28,7 @@ Tetris, support single player mode and multiplayer mode.
 Enter the game and control the left and right keys and Enter key to select the game mode.
 
 <p align="center">
-<img src="doc/pic/HomeSelect.png" alt="home select" style="zoom:40%;" />
+<img src="doc/pic/HomeSelect.png" alt="home select" width="600px" />
 </p>
 
 ### Single Player Mode
@@ -50,7 +50,9 @@ Game items:
 
 A one-time elimination of $n$ rows, will give $n-1$ items, with random types. At the beginning of the game, one random item will be given.
 
-  <img src="doc/pic/SingleGame.png" alt="single game" style="zoom:25%;" /><img src="doc/pic/SingleGameOver.png" alt="single Game Over" style="zoom:25%;" />
+<p align="center">
+  <img src="doc/pic/SingleGame.png" alt="single game" width="450px" /> <img src="doc/pic/SingleGameOver.png" alt="single Game Over" width="450px" />
+</p>
 
 ### Multiplayer Online Battle
 
@@ -59,16 +61,22 @@ A one-time elimination of $n$ rows, will give $n-1$ items, with random types. At
 Game operations:
 
   - Players need to follow the game prompts, enter the ip address and connect to the server.
-
-    <img src="doc/pic/IpInput.png" alt="IpInput" style="zoom:20%;" /><img src="doc/pic/WaitConnect.png" style="zoom:20%;" /><img src="doc/pic/ConnectError.png" alt="ConnectError" style="zoom:20%;" />
+  
+<p align="center">
+    <img src="doc/pic/IpInput.png" alt="IpInput" width="300px" /> <img src="doc/pic/WaitConnect.png" width="300px" /> <img src="doc/pic/ConnectError.png" alt="ConnectError" width="300px" />
+</p>
 
   - After the player connects successfully, he needs to prepare to start the game according to the game prompt, and the game will start automatically when all players are ready.
 
-    <img src="doc/pic/ReadyToPlay.png" alt="ReadyToPlay" style="zoom:25%;" /><img src="doc/pic/WaitOthers.png" style="zoom:25%;" />
+<p align="center">
+    <img src="doc/pic/ReadyToPlay.png" alt="ReadyToPlay" width="450px" /> <img src="doc/pic/WaitOthers.png" width="450px" />
+</p>
 
   - Game operations are similar with those in single mode. The game will end when the block exceeds the game box, and all players will be ranked according to their survival time.
-
-    <img src="doc/pic/MulGame.png" alt="MulGame" style="zoom:25%;" /><img src="doc/pic/MulGameOver.png" alt="MulGameOver" style="zoom:25%;" />
+  
+<p align="center">
+    <img src="doc/pic/MulGame.png" alt="MulGame" width="450px" /> <img src="doc/pic/MulGameOver.png" alt="MulGameOver" width="450px" />
+</p>
 
 Game items:
 
@@ -78,4 +86,6 @@ Game items:
 
 Note that a item will be applid on a random player, including yourself, for extra fun.
 
- <img src="doc/pic/beforeBomb.png" alt="beforeBomb" style="zoom:22%;" /><img src="doc/pic/AfterBomb.png" style="zoom:22%;" /><img src="doc/pic/special.png" alt="special" style="zoom:21%;" /><img src="doc/pic/Cover.png" alt="cover" style="zoom:21%;" />
+<p align="center">
+ <img src="doc/pic/beforeBomb.png" alt="beforeBomb" height="300px" /> <img src="doc/pic/AfterBomb.png" height="300px" /> <img src="doc/pic/special.png" alt="special" height="300px" /> <img src="doc/pic/Cover.png" alt="cover" height="300px" />
+</p>
