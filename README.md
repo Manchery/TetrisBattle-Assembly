@@ -48,7 +48,7 @@ Game items:
 - To slow down
 - To skip the next block
 
-A one-time elimination of $n$ rows, will give $n-1$ items, with random types. At the beginning of the game, one random item will be given.
+A one-time elimination of n rows, will give n-1 items, with random types. At the beginning of the game, one random item will be given.
 
 <p align="center">
   <img src="doc/pic/SingleGame.png" alt="single game" width="450px" /> <img src="doc/pic/SingleGameOver.png" alt="single Game Over" width="450px" />
